@@ -1,14 +1,165 @@
 # 지경학 사건 라이브러리 (손으로 정리, Git에 포함)
-# 날짜는 발표일(현지 기준). 미국 시장 기준 첫 거래일부터 반응 구간을 잡는다.
+# 날짜는 발표일(현지 기준). 미국 시장 기준 첫 거래일부터 반응 구간을 잡는다(주말 발표는 다음 월요일부터).
 # severity(강도)는 임시값이며, 사건이 15건 모이면 GPR·TPU와 실제 변동으로 다시 맞춘다.
-# channels: 이 사건이 움직였을 것으로 보는 팩터와 방향(+1 상승 / -1 하락)
+# instrument(수단): tariff, tariff_pause, tech_export_control, entity_list, resource_export_control,
+#                   currency, financial_sanction
+# direction: escalate(확대, 기본값) / ease(완화). 유사 사례는 방향이 같은 사건끼리만 쓴다.
+# stage: announce, escalate, enforce, retaliate, ease
+# channels: 이 사건이 움직였을 것으로 보는 팩터와 방향(+1 상승 / -1 하락). 충격은 이 팩터만 쓴다.
+#           credit = HYG-IEF 이므로 신용 경색은 -1.
 # confounders: 같은 기간에 겹친 다른 큰 사건. 분석할 때 해석을 조심해야 한다.
+# clean: 반응 창(발표 후 3거래일) 안에 이 사건과 무관한 큰 충격이 없으면 true.
+#        false인 사건은 유사 사례(충격 크기 산정)에서 빼고, 검증 결과도 따로 해석한다.
+#        같은 분쟁의 맞대응(예: 미국 통제 직후 중국 보복)은 같은 에피소드로 보고 clean으로 둔다.
+# 반응 창이 서로 겹치는 사건은 한 건만 넣는다(예: 2024-12-02 미국 반도체 통제는 cn_ban_us_2024에 포함).
 
 events:
+  # ---------------- 2018~2019 미중 무역전쟁 1기 ----------------
+  - id: us_301_2018
+    date: "2018-03-22"
+    title: 미국, 301조 조사 결과에 따른 대중 관세(최대 600억 달러) 각서 서명
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor, industrials]
+    stage: announce
+    severity: 3
+    channels: {risk_off: 1, tech_war: -1, cny: 1}
+    description: >
+      트럼프 대통령이 301조 조사(기술이전·지재권) 결과를 근거로 항공우주·정보통신·로봇·기계 등
+      중국산 제품에 관세를 부과하라는 대통령 각서에 서명. 미중 무역전쟁의 출발점.
+    sources:
+      - https://info.expeditors.com/newsflash/u.s.-president-donald-trump-signs-executive-memo-on-section-301-investigation
+      - https://ttnews.com/articles/trump-slaps-tariffs-50-billion-worth-chinese-goods
+    confounders: [전날(3/21) FOMC 금리 인상(시장 예상대로), 페이스북 개인정보 유출 논란(3/19~)]
+    clean: true
+
+  - id: us_tariff_2019
+    date: "2019-05-05"
+    title: 트럼프, 2000억 달러 중국산 관세 10%→25% 인상 예고 (트윗, 5/10 시행)
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [industrials, semiconductor]
+    stage: escalate
+    severity: 3
+    channels: {risk_off: 1, tech_war: -1, cny: 1}
+    description: >
+      협상이 타결에 가까워 보이던 시점에 일요일 트윗으로 관세 인상과 3250억 달러 추가 관세를 예고.
+      반응은 다음 거래일(5/6)부터.
+    sources:
+      - https://www.axios.com/2019/05/05/trump-china-tariffs-25-percent
+      - https://jdsupra.com/legalnews/president-trump-announces-increase-to-41439
+    confounders: []
+    clean: true
+
+  - id: us_huawei_2019
+    date: "2019-05-15"
+    title: 미국 상무부, 화웨이와 계열사 68곳 엔티티 리스트 지정 (5/16 효력)
+    instrument: entity_list
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor, telecom]
+    stage: enforce
+    severity: 3
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      화웨이에 미국산 부품·소프트웨어·기술을 팔려면 허가가 필요해짐. 같은 날 정보통신 공급망 국가비상사태 행정명령.
+    sources:
+      - https://www.goodwinlaw.com/en/insights/publications/2019/05/05_20-us-targets-chinese-telecom-giant-huawei
+      - https://jdsupra.com/legalnews/commerce-department-blocks-export-53922
+    confounders: [5/13 중국의 보복관세 발표 직후 - 같은 분쟁의 맞대응]
+    clean: true
+
+  - id: cn_fx7_2019
+    date: "2019-08-05"
+    title: 위안화 달러당 7위안 돌파, 미국 재무부 중국 환율조작국 지정
+    instrument: currency
+    direction: escalate
+    initiator: CN
+    target: [US]
+    sectors: [agriculture]
+    stage: retaliate
+    severity: 4
+    channels: {cny: 1, risk_off: 1, tech_war: -1}
+    description: >
+      인민은행이 기준환율을 예상보다 약하게 고시해 위안화가 2008년 이후 처음 7위안을 넘었고,
+      중국은 미국산 농산물 구매도 중단. 같은 날 밤 미국 재무부가 환율조작국으로 지정.
+      8/1 트럼프의 3000억 달러 추가 관세 예고에 대한 맞대응.
+    sources:
+      - https://www.steptoe.com/en/news-publications/international-compliance-blog/china-as-a-currency-manipulator-what-does-it-mean-for-us-businesses.html
+      - https://www.fx-markets.com/central-banks/4403051/us-treasury-designates-china-a-currency-manipulator
+    confounders: [8/1 트럼프 추가 관세 예고 - 같은 분쟁의 에피소드]
+    clean: true
+
+  # ---------------- 2022 러시아 제재 ----------------
+  - id: ru_swift_2022
+    date: "2022-02-26"
+    title: 미국·EU 등, 러시아 은행 SWIFT 배제와 러시아 중앙은행 외환보유액 동결 합의
+    instrument: financial_sanction
+    direction: escalate
+    initiator: US
+    target: [RU]
+    sectors: [banks, energy]
+    stage: enforce
+    severity: 4
+    channels: {oil: 1, risk_off: 1, credit: -1}
+    description: >
+      공동성명으로 일부 러시아 은행의 SWIFT 배제와 중앙은행 외환보유액 사용 제한을 약속. 토요일 발표라 반응은 2/28부터.
+    sources:
+      - https://www.gov.uk/government/news/joint-statement-on-further-restrictive-economic-measures-26-february-2022
+      - https://www.rappler.com/business/united-states-allies-target-russia-swift-ban-certain-banks-february-26-2022/
+    confounders: [2/24 러시아의 우크라이나 침공과 전쟁 전개, 유가 급등]
+    clean: false
+
+  # ---------------- 미국 반도체 통제 ----------------
+  - id: us_chip_2022
+    date: "2022-10-07"
+    title: 미국 BIS, 대중 첨단 반도체·장비 수출통제 (10월 7일 규칙)
+    instrument: tech_export_control
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor]
+    stage: enforce
+    severity: 3
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      첨단 컴퓨팅 칩, 슈퍼컴퓨터, 반도체 제조장비의 대중 수출을 허가제로 묶은 대규모 통제.
+    sources:
+      - https://wsgr.com/en/insights/bis-implements-new-semiconductor-and-supercomputer-related-export-controls-and-end-use-controls.html
+      - https://clearygottlieb.com/news-and-insights/publication-listing/the-united-states-tightens-china-related-export-controls-on-advanced-computing-and-semiconductor-manufacturing-items
+    confounders: [같은 날 9월 고용보고서 발표, 인플레이션·금리 급등장]
+    clean: false
+
+  - id: us_chip_2023
+    date: "2023-10-17"
+    title: 미국 BIS, 대중 반도체 수출통제 강화 (2022년 규칙 보완)
+    instrument: tech_export_control
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor]
+    stage: enforce
+    severity: 3
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      칩 성능 기준을 조정해 통제 대상을 넓히고, 장비 통제와 엔티티 리스트(13곳)를 보강.
+    sources:
+      - https://www.bis.gov/press-release/bis-updated-public-information-page-export-controls-imposed-advanced-computing-semiconductor
+      - https://squirepattonboggs.com/en/insights/publications/2023/10/semiconductor-and-advanced-computing-export-control-rules-modifying-and-reinforcing-the-restrictions-initially-released-on-october-7-2022
+    confounders: [같은 날 소매판매 호조로 금리 급등, 10년물 5% 근접, 이스라엘-하마스 전쟁 초기]
+    clean: false
+
+  # ---------------- 중국 자원 수출통제 ----------------
   - id: cn_ga_ge_2023
     date: "2023-07-03"
     title: 중국, 갈륨·게르마늄 수출통제 발표 (8월 1일 시행)
     instrument: resource_export_control
+    direction: escalate
     initiator: CN
     target: [US, EU, JP]
     sectors: [semiconductor]
@@ -21,12 +172,16 @@ events:
     sources:
       - https://www.mayerbrown.com/en/insights/publications/2023/07/china-imposes-new-export-controls-on-two-minerals-critical-to-the-manufacture-of-semiconductors
       - https://www.globaltradealert.org/state-act/76184/china-government-announces-export-control-measures-for-gallium-and-germanium
-    confounders: [미국 독립기념일 연휴로 7/3 조기 폐장, 7/4 휴장]
+    confounders:
+      - 미국 독립기념일 연휴로 7/3 조기 폐장, 7/4 휴장
+      - 7/6 ADP 민간고용 급증으로 10년물 4% 돌파, S&P500 하락 (반응 창 3일째, 사건과 무관한 금리 충격)
+    clean: false
 
   - id: cn_ban_us_2024
     date: "2024-12-03"
     title: 중국, 갈륨·게르마늄·안티몬 대미 수출 원칙적 금지
     instrument: resource_export_control
+    direction: escalate
     initiator: CN
     target: [US]
     sectors: [semiconductor, defense]
@@ -39,12 +194,14 @@ events:
     sources:
       - https://cset.georgetown.edu/publication/china-rare-earth-export-ban/
       - https://gcaptain.com/china-bans-export-of-key-minerals-to-u-s-as-trade-frictions-escalate
-    confounders: [전날 미국의 대중 반도체 통제(140개 기업) 발표와 반응이 섞임]
+    confounders: [전날 미국의 대중 반도체 통제(140개 기업) 발표와 반응이 섞임 - 같은 분쟁의 맞대응]
+    clean: true
 
   - id: cn_ree_2025
     date: "2025-04-04"
     title: 중국, 중·중희토류 7종 수출통제 (즉시 시행)
     instrument: resource_export_control
+    direction: escalate
     initiator: CN
     target: [US]
     sectors: [semiconductor, defense, autos]
@@ -58,3 +215,63 @@ events:
       - https://www.brecorder.com/news/amp/40355973
       - https://globaltimes.cn/page/202504/1331472.shtml?id=12
     confounders: [같은 날 중국의 대미 34% 보복관세 발표, 4/2 미국 상호관세 발표 직후 급락장]
+    clean: false
+
+  - id: cn_ree_oct_2025
+    date: "2025-10-09"
+    title: 중국, 희토류 수출통제 대폭 확대 (역외 적용·기술 통제, 공고 61·62호)
+    instrument: resource_export_control
+    direction: escalate
+    initiator: CN
+    target: [US, EU, JP]
+    sectors: [semiconductor, defense, autos]
+    stage: escalate
+    severity: 4
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      중국산 희토류가 0.1% 이상 들어간 해외 제품까지 허가 대상으로 넓히고(역외 적용), 희토류 채굴·제련·자석 기술도 통제.
+      다음 날(10/10) 트럼프가 100% 추가 관세를 위협. 11/7 중국이 1년간 시행을 유예.
+    sources:
+      - https://www.mondaq.com/unitedstates/export-controls-trade-investment-sanctions/1698150/china-imposes-extraterritorial-export-control-measures-over-rare-earth-items
+      - https://cset.georgetown.edu/publication/mofcom-notice-2025-61/
+    confounders: [10/10 트럼프 100% 관세 위협 - 같은 분쟁의 맞대응, 미 연방정부 셧다운 진행 중]
+    clean: true
+
+  # ---------------- 완화 사건 (ease) ----------------
+  - id: us_pause_2025
+    date: "2025-04-09"
+    title: 트럼프, 상호관세 90일 유예 (중국은 125%로 인상)
+    instrument: tariff_pause
+    direction: ease
+    initiator: US
+    target: [EU, JP, TW, IN]
+    sectors: [industrials, semiconductor]
+    stage: ease
+    severity: 4
+    channels: {risk_off: -1, tech_war: 1, credit: 1}
+    description: >
+      상호관세 시행 약 14시간 만에 중국을 뺀 국가에 90일 유예와 10% 기본관세를 발표. 같은 날 S&P500 급반등.
+    sources:
+      - https://nam.org/90-day-pause-on-country-specific-reciprocal-tariffs-what-you-need-to-know/
+      - https://www.pbs.org/newshour/politics/trump-backs-down-on-most-tariffs-for-90-days-but-raising-rate-on-chinese-imports-to-125
+    confounders: [다음 날 되돌림 하락 - 같은 관세 에피소드, 4/10 CPI 발표]
+    clean: true
+
+  - id: us_cn_geneva_2025
+    date: "2025-05-12"
+    title: 미중 제네바 공동성명, 상호 관세 115%p 인하 (90일)
+    instrument: tariff_pause
+    direction: ease
+    initiator: US
+    target: [CN]
+    sectors: [industrials, semiconductor]
+    stage: ease
+    severity: 3
+    channels: {risk_off: -1, tech_war: 1, cny: -1}
+    description: >
+      제네바 협상 결과로 미국의 대중 관세는 30%, 중국의 대미 관세는 10%로 낮추고 90일간 협상하기로 합의.
+    sources:
+      - https://www.govinfo.gov/content/pkg/DCPD-202500592/html/DCPD-202500592.htm
+      - https://www.fredlaw.com/alert-u-s-tariffs-update-may-12-2025
+    confounders: [5/13 4월 CPI 발표]
+    clean: true
