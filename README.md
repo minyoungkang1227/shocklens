@@ -9,13 +9,13 @@
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| 1. fetch | ETF 12개 가격(yfinance), 팩터 6개(FRED) 수집 | 완료 |
+| 1. fetch | ETF 13개 가격(yfinance), 팩터 5개(FRED) 수집 | 완료 |
 | 2. returns | 바스켓 수익률, 팩터 변동 계산 | 완료 |
 | 3. betas | 베타 행렬 12×7 (평상시 / 위기 구간), 릿지 회귀 | 완료 |
-| 4. library | 지경학 사건 라이브러리 (현재 3건, 목표 15건) | 진행 중 |
+| 4. library | 지경학 사건 라이브러리 (13건, clean 8건, 목표 15건) | 진행 중 |
 | 5. quantiles | 강도→충격 크기 분위수 표 | 완료 |
 | engine | 충격 계산, 블록 부트스트랩 ES/VaR, 정규MC 비교, 계산 장부 | 완료 (실데이터 검증 전) |
-| agents | 헤드쿼터 + 에이전트 7개 (LangGraph) | 예정 (본선) |
+| agents | 헤드쿼터 + 에이전트 7개 (LangGraph), 가드레일·검증·What-if | 1차 구현 (설계: docs/agents.md) |
 | app | Streamlit 데모 화면 | 예정 (본선) |
 
 ## 실행 방법
@@ -55,10 +55,25 @@ python -m pipeline.run_all
 ### 4) 엔진 데모
 
 ```bash
-python -m engine.demo --event cn_ree_2025
+python -m engine.demo --event cn_ree_2025            # 충격 크기: 발표 후 3거래일 반응 (기본)
+python -m engine.demo --event cn_ree_2025 --window post  # 비교용: 20거래일 누적
 ```
 
+결과의 ES97.5는 세 숫자로 나눠 보여줍니다: ① 평상시(전체 기간 표본), ② 국면(위기면 VIX 상위 20% 표본), ③ ② + 이번 사건 충격. 그래서 '시장이 평소보다 위험한 정도(국면 효과)'와 '이번 사건이 더한 정도(사건 효과)'가 분리됩니다. 유사 사례에는 반응 창에 다른 큰 충격이 겹치지 않은 사건(`clean: true`)만 씁니다(`--all-analogs`로 전체 사용).
+
+충격 크기는 발표 직후 3거래일의 팩터 변동으로 잡습니다. 20거래일 누적은 같은 기간의 시장 전체 흐름이 섞여 사건 효과를 흐리기 때문입니다. 이후 20일의 변동성은 블록 부트스트랩 분포가 맡습니다.
+
 선택한 사건을 새 뉴스로 가정하고, 나머지 사건을 유사 사례로 써서 스트레스테스트를 돌립니다(leave-one-out). 팩터 충격, 시나리오별 포트폴리오 수익률, 충격 전후 VaR95·ES97.5, 정규분포 대비 ES 과소평가, 손실 기여 상위 바스켓, 실제 사건 후 수익률을 출력하고 계산 장부(`data/calc_logs/`)에 기록합니다.
+
+### 5) 에이전트 실행 (헤드쿼터 + 에이전트 7개)
+
+```bash
+python -m agents.run --event cn_ree_oct_2025 --trace            # 라이브러리 사건을 새 뉴스로 가정
+python -m agents.run --file news.txt --trace                    # 뉴스 텍스트 파일
+python -m agents.run --event cn_ree_oct_2025 --whatif "반도체 충격 3배"
+```
+
+`.env`에 `LLM_API_KEY`가 있으면 Event Analyst(뉴스 해석)와 Reporter(브리핑 문장)가 LLM으로 동작하고, 없으면 키워드 규칙·고정 템플릿으로 동작합니다. 숫자는 어느 경우든 코드가 계산하고, Verifier가 브리핑의 모든 숫자·근거 태그를 계산 장부와 대조해 통과하지 못하면 담당 에이전트로 되돌립니다(최대 2회, 이후 "판단 보류"). 에이전트별 설계는 [docs/agents.md](docs/agents.md)에 있습니다.
 
 ## 폴더 구조
 
@@ -76,7 +91,7 @@ data/        파이프라인 산출물 (Git 제외)
 ## 데이터 출처
 
 - ETF 가격: Yahoo Finance (yfinance 라이브러리, Apache-2.0). 데이터는 Yahoo 이용약관에 따라 개인·연구 용도로 사용
-- 팩터: FRED, Federal Reserve Bank of St. Louis (VIXCLS, DTWEXBGS, DEXCHUS, DCOILWTICO, DGS10, BAMLH0A0HYM2)
+- 팩터: FRED, Federal Reserve Bank of St. Louis (VIXCLS, DTWEXBGS, DEXCHUS, DCOILWTICO, DGS10). 신용 팩터는 ETF(HYG−IEF)로 대체: FRED의 하이일드 스프레드는 최근 3년치만 제공됨
 - 뉴스 지수: Caldara & Iacoviello GPR 지수, Caldara et al. TPU 지수 (matteoiacoviello.com)
 
 ## 보안

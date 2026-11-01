@@ -56,6 +56,10 @@ def run() -> None:
     prices = pd.read_parquet(config.RAW_DIR / "prices.parquet")
     fred = pd.read_parquet(config.RAW_DIR / "fred.parquet")
     rets, frets, levels = build(prices, fred, config.portfolio()["baskets"], config.factors()["factors"])
+    if len(rets) < 0.8 * len(prices):
+        print(f"[returns] 경고: 공통 거래일 {len(rets)}일 / ETF {len(prices)}일 -> 데이터 구간이 크게 줄었습니다.")
+        print("[returns] FRED 시리즈별 첫 데이터 날짜 (하나만 유독 늦으면 그 시리즈가 원인):")
+        print(fred.apply(lambda s: s.first_valid_index()).to_string())
     rets.to_parquet(config.PROCESSED_DIR / "returns.parquet")
     frets.to_parquet(config.PROCESSED_DIR / "factor_returns.parquet")
     levels.to_parquet(config.PROCESSED_DIR / "factor_levels.parquet")

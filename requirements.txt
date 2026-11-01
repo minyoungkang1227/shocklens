@@ -9,4 +9,9 @@ yfinance>=0.2.40
 # 테스트
 pytest>=8
 
-# 12월 에이전트 단계에서 추가 예정: langgraph, pydantic, streamlit, LLM SDK
+# 에이전트 (헤드쿼터 + 에이전트 7개)
+langgraph>=0.2
+pydantic>=2.5
+anthropic>=0.40      # LLM_PROVIDER=anthropic 일 때. openai를 쓰려면 openai 패키지를 따로 설치
+
+# 본선 화면 단계에서 추가 예정: streamlit

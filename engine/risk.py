@@ -75,29 +75,53 @@ def normal_mc(paths: np.ndarray, n_paths: int, rng: np.random.Generator) -> np.n
 def run_stress(rets: pd.DataFrame, weights: pd.Series, beta: pd.DataFrame, factor_shock: pd.DataFrame,
                idio: pd.DataFrame | None, eligible_mask: pd.Series | None, horizon: int, block_len: int,
                n_paths: int, var_level: float, es_level: float, seed: int) -> dict:
-    """Risk Engine 본체. 결과는 전부 숫자로 반환하고, 해석·서술은 하지 않는다."""
+    """Risk Engine 본체. 결과는 전부 숫자로 반환하고, 해석·서술은 하지 않는다.
+
+    손실 분포를 세 개로 나눠 계산한다.
+      normal   : 전체 기간에서 뽑은 분포 (평상시)
+      regime   : 국면 표본에서 뽑은 분포 (위기 국면이면 VIX 상위 날짜만, 아니면 normal과 동일)
+      stressed : regime 분포 + 이번 사건의 central 충격
+    그래서 ES 변화를 '국면 효과(regime - normal)'와 '사건 효과(stressed - regime)'로 분리할 수 있다.
+    """
     rng = np.random.default_rng(seed)
     w = weights.reindex(rets.columns).to_numpy() / weights.sum()
     bshock = basket_shock(beta.reindex(rets.columns), factor_shock, idio)
+    R = rets.to_numpy()
 
-    mask = np.ones(len(rets), bool) if eligible_mask is None else eligible_mask.reindex(rets.index).fillna(False).to_numpy()
-    base = block_bootstrap(rets.to_numpy(), np.flatnonzero(mask), horizon, block_len, n_paths, rng)
-    stressed = base + bshock["central"].to_numpy()
+    all_days = np.arange(len(rets))
+    base_normal = block_bootstrap(R, all_days, horizon, block_len, n_paths, rng)
+    if eligible_mask is None:
+        base_regime = base_normal
+        n_eligible = len(rets)
+    else:
+        mask = eligible_mask.reindex(rets.index).fillna(False).to_numpy()
+        base_regime = block_bootstrap(R, np.flatnonzero(mask), horizon, block_len, n_paths, rng)
+        n_eligible = int(mask.sum())
+    stressed = base_regime + bshock["central"].to_numpy()
 
-    base_m = var_es(portfolio_return(base, w), var_level, es_level)
-    str_m = var_es(portfolio_return(stressed, w), var_level, es_level)
-    normal_stressed = normal_mc(base, n_paths, rng) + bshock["central"].to_numpy()
-    nrm_m = var_es(portfolio_return(normal_stressed, w), var_level, es_level)
+    m_normal = var_es(portfolio_return(base_normal, w), var_level, es_level)
+    m_regime = var_es(portfolio_return(base_regime, w), var_level, es_level)
+    m_stress = var_es(portfolio_return(stressed, w), var_level, es_level)
+    normal_stressed = normal_mc(base_regime, n_paths, rng) + bshock["central"].to_numpy()
+    m_nrm = var_es(portfolio_return(normal_stressed, w), var_level, es_level)
 
     return {
         "scenario_loss": scenario_losses(bshock, pd.Series(w, index=rets.columns)).to_dict(),
+        "scenario_loss_factor_only": scenario_losses(
+            basket_shock(beta.reindex(rets.columns), factor_shock, None), pd.Series(w, index=rets.columns)).to_dict(),
         "basket_shock": bshock.to_dict(),
-        "baseline": base_m,
-        "stressed": str_m,
-        "normal_mc_stressed": nrm_m,
-        "es_underestimation_normal": str_m["ES"] - nrm_m["ES"],
+        "baseline_normal": m_normal,
+        "baseline": m_regime,                     # 국면 기준 (충격 전)
+        "stressed": m_stress,
+        "decomposition": {
+            "regime_effect_ES": m_regime["ES"] - m_normal["ES"],
+            "event_effect_ES": m_stress["ES"] - m_regime["ES"],
+            "total_change_ES": m_stress["ES"] - m_normal["ES"],
+        },
+        "normal_mc_stressed": m_nrm,
+        "es_underestimation_normal": m_stress["ES"] - m_nrm["ES"],
         "tail_contribution": dict(zip(rets.columns, tail_contributions(stressed, w, es_level).round(6))),
         "settings": {"horizon": horizon, "block_len": block_len, "n_paths": n_paths,
                      "var_level": var_level, "es_level": es_level, "seed": seed,
-                     "n_eligible_days": int(mask.sum())},
+                     "n_eligible_days": n_eligible},
     }

@@ -24,6 +24,17 @@ def load_events(path: Path = LIBRARY_FILE) -> list[dict]:
         return yaml.safe_load(f)["events"]
 
 
+def clean_ids(events: list[dict]) -> set[str]:
+    """반응 창에 무관한 큰 충격이 겹치지 않은 사건 id. clean 표시가 없으면 깨끗하지 않은 것으로 본다."""
+    return {e["id"] for e in events if e.get("clean") is True}
+
+
+def select_analogs(available: list[str], events: list[dict], target_id: str, clean_only: bool = True) -> list[str]:
+    """유사 사례 후보: 대상 사건 자신은 빼고, clean_only면 깨끗한 사건만 남긴다."""
+    ok = clean_ids(events) if clean_only else {e["id"] for e in events}
+    return [i for i in available if i != target_id and i in ok]
+
+
 def first_trading_index(index: pd.DatetimeIndex, date: str) -> int:
     pos = index.searchsorted(pd.Timestamp(date))
     if pos >= len(index):
@@ -56,12 +67,21 @@ def run() -> None:
     frets = pd.read_parquet(config.PROCESSED_DIR / "factor_returns.parquet")
     beta = pd.read_csv(config.MODEL_DIR / "beta_normal.csv", index_col=0)
     events = load_events()
+    # 20거래일 누적 (참고용)
     f_post, f_pre, b_post, resid = event_windows(events, rets, frets, beta, th["pre_days"], th["post_days"])
     f_post.to_csv(config.MODEL_DIR / "event_factor_post.csv")
     f_pre.to_csv(config.MODEL_DIR / "event_factor_pre.csv")
     b_post.to_csv(config.MODEL_DIR / "event_basket_post.csv")
     resid.to_csv(config.MODEL_DIR / "event_resid_post.csv")
+    # 발표 직후 반응 창 (충격 크기 산정의 기본값)
+    f_re, _, b_re, resid_re = event_windows(events, rets, frets, beta, th["pre_days"], th["react_days"])
+    f_re.to_csv(config.MODEL_DIR / "event_factor_react.csv")
+    b_re.to_csv(config.MODEL_DIR / "event_basket_react.csv")
+    resid_re.to_csv(config.MODEL_DIR / "event_resid_react.csv")
     print(f"[library] 사건 {len(f_post)}건 구간 계산 완료")
+    print(f"[library] 발표 후 {th['react_days']}거래일 반응 (충격 산정 기본값):")
+    print(f_re.round(4).to_string())
+    print(f"[library] 발표 후 {th['post_days']}거래일 누적 (참고):")
     print(f_post.round(4).to_string())
 
 

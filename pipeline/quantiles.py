@@ -26,12 +26,17 @@ def quantile_tables(frets: pd.DataFrame, horizon: int, levels=LEVELS):
 
 
 def run() -> None:
-    horizon = config.thresholds()["risk"]["horizon_days"]
+    cfg = config.thresholds()
     frets = pd.read_parquet(config.PROCESSED_DIR / "factor_returns.parquet")
+    horizon = cfg["risk"]["horizon_days"]
     up, down = quantile_tables(frets, horizon)
     up.to_csv(config.MODEL_DIR / "factor_quantiles_up.csv")
     down.to_csv(config.MODEL_DIR / "factor_quantiles_down.csv")
-    print(f"[quantiles] {horizon}일 변동 분위수 표 저장 (팩터 {len(up)}개)")
+    react = cfg["event_window"]["react_days"]
+    up_r, down_r = quantile_tables(frets, react)
+    up_r.to_csv(config.MODEL_DIR / "factor_quantiles_react_up.csv")
+    down_r.to_csv(config.MODEL_DIR / "factor_quantiles_react_down.csv")
+    print(f"[quantiles] {horizon}일, {react}일 변동 분위수 표 저장 (팩터 {len(up)}개)")
 
 
 if __name__ == "__main__":

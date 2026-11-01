@@ -30,11 +30,15 @@ factors:
     source: fred
     series: DGS10
     kind: level
-  hy_spread:
-    label: 하이일드 스프레드
-    source: fred
-    series: BAMLH0A0HYM2
-    kind: level
+  credit:
+    # FRED의 ICE BofA 하이일드 스프레드(BAMLH0A0HYM2)는 최근 3년치만 제공되어 쓸 수 없다.
+    # 대신 하이일드 채권 ETF(HYG)와 미 국채 ETF(IEF)의 수익률 차이로 신용 스트레스를 본다.
+    # 값이 음수면 하이일드가 국채보다 못한 것 = 신용 스트레스.
+    label: 신용 (하이일드 - 미 국채)
+    source: etf
+    long: HYG
+    short: IEF
+    kind: spread_ret
   tech_war:
     label: 기술전쟁 (반도체 - 미국 주식)
     source: etf

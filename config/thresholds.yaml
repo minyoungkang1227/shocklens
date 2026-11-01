@@ -8,11 +8,14 @@ analog:
     sector: 0.3
     countries: 0.2
     stage: 0.1
-  struct_vs_embed: 0.5   # 유사도 = 0.5 * 구조 + 0.5 * 임베딩
+  top_k: 3               # 유사 사례로 쓸 최대 사건 수
+  struct_vs_embed: 0.5   # (임베딩 추가 후) 유사도 = 0.5 * 구조 + 0.5 * 임베딩. 지금은 구조 점수만 사용
+  clip_wrong_sign: true  # 영향 채널이 기대와 반대로 움직인 값은 0으로 (사건이 포트폴리오를 돕는 경우 제외)
 
 event_window:
   pre_days: 5
-  post_days: 20
+  post_days: 20      # 참고용 20거래일 누적 (장기 흐름, 시장 전체 움직임이 섞임)
+  react_days: 3      # 충격 크기 산정에 쓰는 발표 직후 반응 창 (기본값)
 
 betas:
   ridge_alpha: 1.0       # 릿지 회귀 강도 (표준화된 팩터 기준)
