@@ -16,7 +16,7 @@
 | 5. quantiles | 강도→충격 크기 분위수 표 | 완료 |
 | engine | 충격 계산, 블록 부트스트랩 ES/VaR, 정규MC 비교, 계산 장부 | 완료 (실데이터 검증 전) |
 | agents | 헤드쿼터 + 에이전트 7개 (LangGraph), 가드레일·검증·What-if | 1차 구현 (설계: docs/agents.md) |
-| app | Streamlit 데모 화면 | 예정 (본선) |
+| app | Streamlit 데모 화면 (`streamlit run app/streamlit_app.py`) | 1차 구현 |
 
 ## 실행 방법
 
@@ -74,6 +74,14 @@ python -m agents.run --event cn_ree_oct_2025 --whatif "반도체 충격 3배"
 ```
 
 `.env`에 `LLM_API_KEY`가 있으면 Event Analyst(뉴스 해석)와 Reporter(브리핑 문장)가 LLM으로 동작하고, 없으면 키워드 규칙·고정 템플릿으로 동작합니다. 숫자는 어느 경우든 코드가 계산하고, Verifier가 브리핑의 모든 숫자·근거 태그를 계산 장부와 대조해 통과하지 못하면 담당 에이전트로 되돌립니다(최대 2회, 이후 "판단 보류"). 에이전트별 설계는 [docs/agents.md](docs/agents.md)에 있습니다.
+
+### 6) 데모 화면
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+브라우저가 열리면 과거 사건을 고르거나 뉴스를 붙여넣고 실행합니다. ES 3단 분해, 브리핑, 사건 카드, 유사 사건, 직접 노출, 팩터 충격, 에이전트 실행 기록, 검증 결과, What-if를 한 화면에서 봅니다. 데이터(`data/model`)가 없으면 처음 실행할 때 파이프라인을 자동으로 돌립니다.
 
 ## 폴더 구조
 

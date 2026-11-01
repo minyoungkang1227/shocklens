@@ -14,4 +14,5 @@ langgraph>=0.2
 pydantic>=2.5
 anthropic>=0.40      # LLM_PROVIDER=anthropic 일 때. openai를 쓰려면 openai 패키지를 따로 설치
 
-# 본선 화면 단계에서 추가 예정: streamlit
+# 데모 화면
+streamlit>=1.40
