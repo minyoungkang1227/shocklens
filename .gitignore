@@ -1,0 +1,26 @@
+# 비밀값: API 키는 .env 에만 두고 절대 커밋하지 않는다
+.env
+*.env
+!.env.example
+
+# 데이터 산출물 (pipeline.run_all 로 다시 만들 수 있음)
+data/raw/
+data/processed/
+data/model/
+data/calc_logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# 에디터·OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Streamlit 비밀값
+.streamlit/secrets.toml
