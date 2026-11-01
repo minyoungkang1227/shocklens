@@ -12,9 +12,9 @@
 | 1. fetch | ETF 12개 가격(yfinance), 팩터 6개(FRED) 수집 | 완료 |
 | 2. returns | 바스켓 수익률, 팩터 변동 계산 | 완료 |
 | 3. betas | 베타 행렬 12×7 (평상시 / 위기 구간), 릿지 회귀 | 완료 |
-| 4. library | 지경학 사건 라이브러리 15건 | 예정 |
-| 5. quantiles | 강도→충격 크기 분위수 표 | 예정 |
-| engine | 충격 계산, 블록 부트스트랩 ES/VaR | 예정 |
+| 4. library | 지경학 사건 라이브러리 (현재 3건, 목표 15건) | 진행 중 |
+| 5. quantiles | 강도→충격 크기 분위수 표 | 완료 |
+| engine | 충격 계산, 블록 부트스트랩 ES/VaR, 정규MC 비교, 계산 장부 | 완료 (실데이터 검증 전) |
 | agents | 헤드쿼터 + 에이전트 7개 (LangGraph) | 예정 (본선) |
 | app | Streamlit 데모 화면 | 예정 (본선) |
 
@@ -50,7 +50,15 @@ python -m pytest -q
 python -m pipeline.run_all
 ```
 
-끝나면 `data/model/` 에 `beta_normal.csv`, `beta_crisis.csv` 가 생깁니다. 데이터 파일은 Git에 올라가지 않으며 언제든 다시 만들 수 있습니다.
+끝나면 `data/model/` 에 베타 행렬, 사건 구간, 분위수 표가 생깁니다. 데이터 파일은 Git에 올라가지 않으며 언제든 다시 만들 수 있습니다.
+
+### 4) 엔진 데모
+
+```bash
+python -m engine.demo --event cn_ree_2025
+```
+
+선택한 사건을 새 뉴스로 가정하고, 나머지 사건을 유사 사례로 써서 스트레스테스트를 돌립니다(leave-one-out). 팩터 충격, 시나리오별 포트폴리오 수익률, 충격 전후 VaR95·ES97.5, 정규분포 대비 ES 과소평가, 손실 기여 상위 바스켓, 실제 사건 후 수익률을 출력하고 계산 장부(`data/calc_logs/`)에 기록합니다.
 
 ## 폴더 구조
 

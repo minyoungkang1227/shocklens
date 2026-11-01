@@ -1,0 +1,60 @@
+# 지경학 사건 라이브러리 (손으로 정리, Git에 포함)
+# 날짜는 발표일(현지 기준). 미국 시장 기준 첫 거래일부터 반응 구간을 잡는다.
+# severity(강도)는 임시값이며, 사건이 15건 모이면 GPR·TPU와 실제 변동으로 다시 맞춘다.
+# channels: 이 사건이 움직였을 것으로 보는 팩터와 방향(+1 상승 / -1 하락)
+# confounders: 같은 기간에 겹친 다른 큰 사건. 분석할 때 해석을 조심해야 한다.
+
+events:
+  - id: cn_ga_ge_2023
+    date: "2023-07-03"
+    title: 중국, 갈륨·게르마늄 수출통제 발표 (8월 1일 시행)
+    instrument: resource_export_control
+    initiator: CN
+    target: [US, EU, JP]
+    sectors: [semiconductor]
+    stage: announce
+    severity: 3
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      중국 상무부와 해관총서가 반도체 원료인 갈륨·게르마늄 관련 품목에 수출 허가제를 도입한다고 발표.
+      미국과 동맹국의 대중 반도체 장비 통제에 대한 대응으로 해석됨.
+    sources:
+      - https://www.mayerbrown.com/en/insights/publications/2023/07/china-imposes-new-export-controls-on-two-minerals-critical-to-the-manufacture-of-semiconductors
+      - https://www.globaltradealert.org/state-act/76184/china-government-announces-export-control-measures-for-gallium-and-germanium
+    confounders: [미국 독립기념일 연휴로 7/3 조기 폐장, 7/4 휴장]
+
+  - id: cn_ban_us_2024
+    date: "2024-12-03"
+    title: 중국, 갈륨·게르마늄·안티몬 대미 수출 원칙적 금지
+    instrument: resource_export_control
+    initiator: CN
+    target: [US]
+    sectors: [semiconductor, defense]
+    stage: enforce
+    severity: 3
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      중국 상무부 공고 2024년 제46호. 이중용도 품목인 갈륨·게르마늄·안티몬·초경질 소재의 대미 수출을
+      원칙적으로 불허하고 흑연은 최종 사용자 심사를 강화. 전날(12/2) 미국의 대중 반도체 추가 통제 직후 발표.
+    sources:
+      - https://cset.georgetown.edu/publication/china-rare-earth-export-ban/
+      - https://gcaptain.com/china-bans-export-of-key-minerals-to-u-s-as-trade-frictions-escalate
+    confounders: [전날 미국의 대중 반도체 통제(140개 기업) 발표와 반응이 섞임]
+
+  - id: cn_ree_2025
+    date: "2025-04-04"
+    title: 중국, 중·중희토류 7종 수출통제 (즉시 시행)
+    instrument: resource_export_control
+    initiator: CN
+    target: [US]
+    sectors: [semiconductor, defense, autos]
+    stage: retaliate
+    severity: 4
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      상무부·해관총서 공고 2025년 제18호. 사마륨·가돌리늄·테르븀·디스프로슘·루테튬·스칸듐·이트륨 관련 품목을
+      수출통제 목록에 올림. 미국 상호관세에 대한 보복 조치의 하나.
+    sources:
+      - https://www.brecorder.com/news/amp/40355973
+      - https://globaltimes.cn/page/202504/1331472.shtml?id=12
+    confounders: [같은 날 중국의 대미 34% 보복관세 발표, 4/2 미국 상호관세 발표 직후 급락장]
