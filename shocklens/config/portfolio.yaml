@@ -1,0 +1,21 @@
+# 가상 KIC 포트폴리오 (12개 바스켓)
+# 전통자산 78 / 대체자산 22 는 KIC 공개 비중(2025년 말 78.1 / 21.9)에 맞춤.
+# 그 안의 세부 분할은 공개 자료가 없어 가정한 값이며 자유롭게 바꿀 수 있다.
+# 주의: KIC 위탁자산은 해외 투자만 가능하므로 한국 주식은 포함하지 않는다.
+
+baskets:
+  us_equity:      {ticker: SPY,  weight: 26, group: equity,      label: 미국 주식}
+  eu_equity:      {ticker: VGK,  weight: 8,  group: equity,      label: 유럽 주식}
+  jp_equity:      {ticker: EWJ,  weight: 4,  group: equity,      label: 일본 주식}
+  cn_equity:      {ticker: MCHI, weight: 2,  group: equity,      label: 중국 주식}
+  tw_equity:      {ticker: EWT,  weight: 2,  group: equity,      label: 대만 주식}
+  in_equity:      {ticker: INDA, weight: 2,  group: equity,      label: 인도 주식}
+  semis:          {ticker: SOXX, weight: 3,  group: equity,      label: 반도체}
+  us_treasury:    {ticker: IEF,  weight: 16, group: bond,        label: 미 국채 7-10년}
+  intl_treasury:  {ticker: BWX,  weight: 8,  group: bond,        label: 미국 외 선진국 국채}
+  us_corp:        {ticker: LQD,  weight: 7,  group: bond,        label: 미 투자등급 회사채}
+  infra_realty:   {ticker: IGF,  weight: 12, group: alternative, label: 인프라·부동산}
+  listed_pe:      {ticker: PSP,  weight: 10, group: alternative, label: 상장 사모주식}
+
+# 데이터 시작일: INDA 상장(2012-02) 이후로 맞춤
+start_date: "2012-03-01"

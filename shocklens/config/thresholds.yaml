@@ -1,0 +1,36 @@
+# 모든 임계값은 임시값. 사건 라이브러리 완성 후 데이터로 재설정한다.
+
+analog:
+  direct_min: 0.7        # 최고 유사도가 이 이상이면 direct
+  relaxed_min: 0.4       # 이 이상이면 relaxed, 미만이면 synthetic
+  weights:               # 구조 점수 가중치
+    instrument: 0.4
+    sector: 0.3
+    countries: 0.2
+    stage: 0.1
+  struct_vs_embed: 0.5   # 유사도 = 0.5 * 구조 + 0.5 * 임베딩
+
+event_window:
+  pre_days: 5
+  post_days: 20
+
+betas:
+  ridge_alpha: 1.0       # 릿지 회귀 강도 (표준화된 팩터 기준)
+  crisis_vix_quantile: 0.8   # VIX 수준이 상위 20%인 날 = 위기 구간
+
+risk:
+  horizon_days: 20
+  n_paths: 10000
+  block_len: 5
+  es_level: 0.975
+  var_level: 0.95
+  seed: 20261112
+
+severity:
+  crisis_regime_min: 4   # 강도 4 이상이면 위기 베타 사용
+  # 강도 -> 팩터 20일 변동 분위수 (임시, 사건 라이브러리로 역산해 확정)
+  quantile_map: {1: 0.50, 2: 0.80, 3: 0.95, 4: 0.99, 5: 0.995}
+
+hq:
+  max_retries: 2
+  shock_outlier_multiple: 2.0   # 충격 중앙값이 과거 최대의 2배 초과 시 경고
