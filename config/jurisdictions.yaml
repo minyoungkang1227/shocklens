@@ -1,0 +1,22 @@
+# 바스켓별 자산 소재 관할국(근사)과 블록 구분. 국부펀드 고유 위험(동결·대응조치 노출)과 블록·집중도 계산에 쓴다.
+# 비율은 ETF 대표 구성을 거칠게 근사한 초안이며, 실제 보유 내역이 있으면 종목 단위로 대체한다.
+baskets:
+  us_equity:     {US: 1.0}
+  eu_equity:     {EU: 0.85, GB: 0.15}
+  jp_equity:     {JP: 1.0}
+  cn_equity:     {CN: 1.0}
+  tw_equity:     {TW: 1.0}
+  in_equity:     {IN: 1.0}
+  semis:         {US: 0.8, TW: 0.1, EU: 0.1}
+  us_treasury:   {US: 1.0}
+  intl_treasury: {EU: 0.5, JP: 0.3, GB: 0.1, CA: 0.1}
+  us_corp:       {US: 1.0}
+  infra_realty:  {US: 0.5, EU: 0.25, CA: 0.1, JP: 0.05, GLOBAL: 0.1}
+  listed_pe:     {US: 0.6, EU: 0.3, GB: 0.1}
+
+blocs:            # 분절화 분석용 블록 (IMF 연구의 미국 블록·중국 블록·비동맹 구분을 단순화)
+  미국 블록: [US, EU, JP, TW, GB, CA, KR]
+  중국 블록: [CN, RU, IR]
+  비동맹·연결국: [IN, VN, MX, SA, GLOBAL]
+rival_bloc: 중국 블록   # 국부펀드 고유 위험에서 '대응조치·자본통제 노출'로 보는 블록
+flashpoints: [TW]  # 블록은 미국 쪽이지만 분쟁 당사 지역

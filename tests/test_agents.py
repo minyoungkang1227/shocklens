@@ -20,7 +20,7 @@ class FakeLLM:
     def __init__(self, jsons=None, texts=None):
         self.jsons, self.texts, self.calls = list(jsons or []), list(texts or []), 0
 
-    def complete_json(self, system, user, max_tokens=2000, retries=1):
+    def complete_json(self, system, user, max_tokens=2000, retries=1, **kw):
         self.calls += 1
         return self.jsons.pop(0) if self.jsons else None
 
@@ -58,6 +58,7 @@ def ctx(tmp_path, monkeypatch):
         emap = yaml.safe_load(f)
     th = config.thresholds()
     th["risk"]["n_paths"] = 500
+    th.setdefault("attention", {})["enabled"] = False          # 테스트는 네트워크를 쓰지 않는다
     return Context(thresholds=th, weights=pd.Series({b: v["weight"] for b, v in pf.items()}, dtype=float),
                    exposure_map=emap, events=events, rets=rets, levels=levels, beta_normal=beta,
                    beta_crisis=beta * 1.2, f_event=f_ev, b_event=f_ev @ beta.T, resid_event=resid,
@@ -172,3 +173,59 @@ def test_whatif_reruns_from_shock_mapper(ctx):
     assert res["risk_result"]["stressed"]["ES"] > base["risk_result"]["stressed"]["ES"]
     with pytest.raises(ValueError):
         parse_whatif("그냥 좀 세게")
+
+
+def test_event_analyst_corrects_direction_from_words():
+    text = "미중 관세 휴전 유예가 종료되면서 미국은 중국산 제품 관세를 다시 인상한다고 발표했다. 중국은 보복 관세로 맞대응하겠다고 밝혔다."
+    ev = event_analyst.analyze(text, NoLLM())["event"]
+    assert ev["direction"] == "escalate" and ev["instrument"] == "tariff"
+    assert "direction" in ev["uncertain_fields"]
+
+
+def test_news_run_uses_text_similarity_and_size_class(ctx):
+    res = run_news(REE_NEWS, ctx, NoLLM())
+    assert res["status"] == "ok" and res["size_class"] in ("small", "medium", "large")
+    assert all(a["text"] is not None for a in res["analogs"])          # 기사 유사도가 점수에 반영됨
+    assert res["shock_method"].split("(")[0] in ("weighted", "event_level", "synthetic")
+
+
+def test_event_guard_computes_severity_from_components():
+    sents = event_analyst.split_sentences(REE_NEWS)
+    draft = {"instrument": "resource_export_control", "initiator": "CN", "target": ["US"],
+             "severity_components": {"scope": 5, "immediacy": 5, "substitut": 5, "escalation": 4, "parties": 5, "surprise": "4"},
+             "evidence": {"instrument": ["s1"], "initiator": ["s1"], "target": ["s2"], "scope": ["s1"]}}
+    ev, errors = event_analyst.guard(draft, sents, REE_NEWS)
+    assert not errors and ev.severity == 5 and ev.severity_points > 80 and ev.severity_components["surprise"] == 4
+    ev2, _ = event_analyst.guard({"instrument": "tariff", "initiator": "US", "target": ["CN"], "severity": 2}, sents, REE_NEWS)
+    assert ev2.severity == 2 and ev2.severity_points == 25.0 and "severity" in ev2.uncertain_fields
+
+
+def test_run_uses_market_regime_and_es_range(ctx):
+    ctx.thresholds["regime"] = {"mode": "market", "crisis_vix_quantile": 0.8, "lookback_days": 5}
+    res = run_library_event("cn_ban_us_2024", ctx, NoLLM())
+    assert res["regime_info"]["mode"] == "market" and "VIX" in res["regime_info"]["reason"]
+    r = res["risk_result"]
+    assert r["stressed_severe"]["ES"] >= r["stressed"]["ES"]
+    assert "최악 시나리오" in res["final_brief"]
+
+
+def test_anthropic_call_uses_only_sdk_supported_arguments():
+    """실제 설치된 anthropic SDK의 messages.create 시그니처와 우리가 넘기는 인자를 대조한다."""
+    import inspect
+    anthropic = pytest.importorskip("anthropic")
+    from agents.llm import LLM
+    allowed = set(inspect.signature(anthropic.Anthropic(api_key="x").messages.create).parameters)
+    kw = LLM(provider="anthropic", api_key="x").anthropic_kwargs("sys", "hi", 100)
+    assert set(kw) <= allowed, f"SDK가 받지 않는 인자: {set(kw) - allowed}"
+
+
+def test_verifier_catches_horizon_and_normal_mc_mislabels():
+    facts = {"LOSS_CENTRAL": "-0.11%", "NORMAL_MC_ES": "6.91%", "ES_STRESSED": "8.69%"}
+    rr = {"decomposition": {"event_effect_ES": 0.001}}
+    bad = ("중심 시나리오의 20거래일 손실은 -0.11%입니다 [calc]. "
+           "평상시 몬테카를로 ES 6.91%는 스트레스 ES보다 낮습니다 [calc].")
+    kinds = [i["kind"] for i in verifier.check(bad, facts, {}, rr, {"uncertain_fields": []})["issues"]]
+    assert kinds.count("label") == 2
+    ok = ("발표 후 3거래일 중앙 시나리오 수익률은 -0.11%입니다 [calc]. "
+          "정규분포를 가정하면 ES가 6.91%로 낮게 나옵니다 [calc].")
+    assert verifier.check(ok, facts, {}, rr, {"uncertain_fields": []})["passed"]

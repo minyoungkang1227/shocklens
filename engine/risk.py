@@ -98,10 +98,14 @@ def run_stress(rets: pd.DataFrame, weights: pd.Series, beta: pd.DataFrame, facto
         base_regime = block_bootstrap(R, np.flatnonzero(mask), horizon, block_len, n_paths, rng)
         n_eligible = int(mask.sum())
     stressed = base_regime + bshock["central"].to_numpy()
+    stressed_sev = base_regime + bshock["severe"].to_numpy()          # 최악 시나리오 충격을 얹은 분포
+    stressed_mild = base_regime + bshock["mild"].to_numpy()
 
     m_normal = var_es(portfolio_return(base_normal, w), var_level, es_level)
     m_regime = var_es(portfolio_return(base_regime, w), var_level, es_level)
     m_stress = var_es(portfolio_return(stressed, w), var_level, es_level)
+    m_stress_sev = var_es(portfolio_return(stressed_sev, w), var_level, es_level)
+    m_stress_mild = var_es(portfolio_return(stressed_mild, w), var_level, es_level)
     normal_stressed = normal_mc(base_regime, n_paths, rng) + bshock["central"].to_numpy()
     m_nrm = var_es(portfolio_return(normal_stressed, w), var_level, es_level)
 
@@ -113,10 +117,13 @@ def run_stress(rets: pd.DataFrame, weights: pd.Series, beta: pd.DataFrame, facto
         "baseline_normal": m_normal,
         "baseline": m_regime,                     # 국면 기준 (충격 전)
         "stressed": m_stress,
+        "stressed_mild": m_stress_mild,           # mild 충격 반영 ES/VaR
+        "stressed_severe": m_stress_sev,          # severe 충격 반영 ES/VaR (스트레스 범위의 상단)
         "decomposition": {
             "regime_effect_ES": m_regime["ES"] - m_normal["ES"],
             "event_effect_ES": m_stress["ES"] - m_regime["ES"],
             "total_change_ES": m_stress["ES"] - m_normal["ES"],
+            "event_effect_ES_severe": m_stress_sev["ES"] - m_regime["ES"],
         },
         "normal_mc_stressed": m_nrm,
         "es_underestimation_normal": m_stress["ES"] - m_nrm["ES"],

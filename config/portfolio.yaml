@@ -17,5 +17,8 @@ baskets:
   infra_realty:   {ticker: IGF,  weight: 12, group: alternative, label: 인프라·부동산}
   listed_pe:      {ticker: PSP,  weight: 10, group: alternative, label: 상장 사모주식}
 
-# 데이터 시작일: INDA 상장(2012-02) 이후로 맞춤
+# 데이터 시작일: INDA 상장(2012-02) 이후로 맞춤 (바스켓 수익률·베타·부트스트랩에 사용)
 start_date: "2012-03-01"
+# 팩터 장기 시작일: SOXX 상장(2001-07) 이후. 과거 사건의 팩터 반응(충격 크기)만 이 긴 기간으로 잰다.
+# 팩터마다 데이터가 시작되는 날이 달라 이른 시기에는 일부 팩터가 비어 있다(그 사건은 있는 채널만 사용).
+factor_start_date: "2001-08-01"

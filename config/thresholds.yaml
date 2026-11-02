@@ -8,8 +8,19 @@ analog:
     sector: 0.3
     countries: 0.2
     stage: 0.1
-  top_k: 3               # 유사 사례로 쓸 최대 사건 수
-  struct_vs_embed: 0.5   # (임베딩 추가 후) 유사도 = 0.5 * 구조 + 0.5 * 임베딩. 지금은 구조 점수만 사용
+  top_k: 10              # 유사 사례로 쓸 최대 사건 수 (가중 분포에 쓰므로 넉넉히)
+  text_weight: 0.5       # 점수 = 0.5 x 구조 + 0.5 x 기사 문장 유사도 (기사 텍스트가 있을 때)
+  size_classes:          # 충격 크기 등급(강도 기준). 같은 등급끼리만 비교
+    small: [1, 2]
+    medium: [3]
+    large: [4, 5]
+  min_same_class: 2      # 같은 등급 후보가 이보다 적으면 인접 등급을 보충
+  adjacent_class_weight: 0.5   # 보충한 인접 등급 사건의 가중치 배율
+  min_weighted: 3        # 유사 사건이 이 이상이면 가중 분포(25/50/90%), 미만이면 사건 단위 선택
+  scenario_quantiles: [0.25, 0.5, 0.9]
+  severe_floor: true     # severe가 강도 기준 분위수보다 약하면 끌어올림
+  severe_floor_level_offset: -1   # 기준 = 강도 한 단계 아래의 분위수
+  closeness_scale: 20    # 강도 점수(0~100) 차이가 이 값일 때 가중치 0.5, 같으면 1 (부드러운 등급 가중)
   clip_wrong_sign: true  # 영향 채널이 기대와 반대로 움직인 값은 0으로 (사건이 포트폴리오를 돕는 경우 제외)
 
 event_window:
@@ -30,9 +41,40 @@ risk:
   seed: 20261112
 
 severity:
-  crisis_regime_min: 4   # 강도 4 이상이면 위기 베타 사용
+  # 강도 = 6요소(범위·즉시성·대체가능성·확전단계·당사국규모·예상밖, 각 1~5) 가중 합 -> 0~100 점수 -> 1~5 등급
+  component_weights: {scope: 0.20, immediacy: 0.15, substitut: 0.15, escalation: 0.15, parties: 0.15, surprise: 0.20}
+  self_consistency: {n: 3, spread_warn: 2}   # LLM이 강도를 n번 채점해 요소별 중앙값 사용, 흩어짐>=spread_warn 이면 불확실 표시
+  use_components: true         # false면 events.yaml의 severity 숫자를 그대로 사용
+  crisis_regime_min: 4   # (regime.mode=severity 일 때) 강도 4 이상이면 위기 베타 사용
   # 강도 -> 팩터 20일 변동 분위수 (임시, 사건 라이브러리로 역산해 확정)
   quantile_map: {1: 0.50, 2: 0.80, 3: 0.95, 4: 0.99, 5: 0.995}
+
+regime:
+  mode: market           # market = 현재 VIX 분위수로 국면 결정 (기본) / severity = 사건 강도로 결정 (이전 방식)
+  crisis_vix_quantile: 0.8    # 최근 VIX가 전체 기간 상위 20% 안이면 위기 국면
+  lookback_days: 5            # 최근 n거래일 VIX 평균으로 판단 (하루 튀는 값 방지)
+
+reporter:
+  citations: true        # 뉴스 문장을 인용 기능(custom content 문서)으로 넘겨 [src:] 태그를 API 인용으로 보강
+
+llm:
+  verifier_model: claude-haiku-5-5   # Verifier 사실 검사는 작성자와 다른(작은) 모델로
+  verifier_llm_check: warn           # off / warn(경고만) / reject(반려)
+  triage_model: claude-haiku-5-5     # 뉴스 중요도 1차 분류
+  analog_rerank: false               # true면 Analog Finder 상위 후보를 Claude가 재평가 (평가: python -m agents.analog_eval)
+
+attention:
+  enabled: true          # 뉴스 입력이면 사건 직전 보도량(GDELT)으로 주의도 측정
+  high_percentile: 80    # 이 이상이면 '이미 예상된 사건일 수 있음' 경고
+  adjust_surprise: false # true면 주의도가 높을 때 강도 '의외성'을 1 낮춤
+
+triage:
+  enabled: true
+  min_importance: 2      # 1~5. 이보다 낮으면 전체 분석을 생략 (force로 강제 실행 가능)
+
+news:
+  headline_max_chars: 140   # 이보다 짧은 한 문장 입력은 헤드라인으로 보고 원문 기사를 찾는다
+  max_sentences: 40         # 긴 기사·보고서는 핵심 문장만 골라 Event Analyst에 넘긴다
 
 hq:
   max_retries: 2

@@ -12,7 +12,7 @@
 | 1. fetch | ETF 13개 가격(yfinance), 팩터 5개(FRED) 수집 | 완료 |
 | 2. returns | 바스켓 수익률, 팩터 변동 계산 | 완료 |
 | 3. betas | 베타 행렬 12×7 (평상시 / 위기 구간), 릿지 회귀 | 완료 |
-| 4. library | 지경학 사건 라이브러리 (13건, clean 8건, 목표 15건) | 진행 중 |
+| 4. library | 지경학 사건 라이브러리 24건(clean 13건, 2002~2025). 2012년 이전 사건은 팩터 반응만 | 진행 중 |
 | 5. quantiles | 강도→충격 크기 분위수 표 | 완료 |
 | engine | 충격 계산, 블록 부트스트랩 ES/VaR, 정규MC 비교, 계산 장부 | 완료 (실데이터 검증 전) |
 | agents | 헤드쿼터 + 에이전트 7개 (LangGraph), 가드레일·검증·What-if | 1차 구현 (설계: docs/agents.md) |
@@ -65,17 +65,75 @@ python -m engine.demo --event cn_ree_2025 --window post  # 비교용: 20거래�
 
 선택한 사건을 새 뉴스로 가정하고, 나머지 사건을 유사 사례로 써서 스트레스테스트를 돌립니다(leave-one-out). 팩터 충격, 시나리오별 포트폴리오 수익률, 충격 전후 VaR95·ES97.5, 정규분포 대비 ES 과소평가, 손실 기여 상위 바스켓, 실제 사건 후 수익률을 출력하고 계산 장부(`data/calc_logs/`)에 기록합니다.
 
+### 4-1) 백테스트 (예측 vs 실제)
+
+```bash
+python -m agents.backtest          # clean 사건을 하나씩 새 뉴스로 가정 -> 방향 적중률, 범위 적중률, severe 커버, 오차
+```
+
+v1(구조 점수만)과 v2(문장 유사도·등급 분리·가중 분포·severe 하한선)를 나란히 비교하고 `data/model/backtest.csv`에 저장합니다. 대상 사건보다 먼저 일어난 사건만 유사 사례로 씁니다.
+
+### 4-2) 위약 검정 (사건 반응이 우연인가)
+
+```bash
+python -m engine.placebo           # 사건마다 3거래일 반응이 무작위 창 5,000개 중 몇 번째 백분위인지
+```
+
+백분위 80% 이상이면 평소 변동의 상위 20%보다 큰 반응입니다. 강도 점수와 실제 반응의 상관도 같이 출력합니다.
+
+### 4-2b) 충격 크기 등급별 분석
+
+```bash
+python -m engine.size_report      # 소·중·대 등급별 과거 사건 반응 요약 (작은 사건끼리, 큰 사건끼리)
+```
+
+### 4-3) LLM 연결 점검
+
+```bash
+python -m agents.llm_check         # .env의 키로 연결 확인 + 샘플 뉴스 3건 구조화 결과
+python -m agents.llm_check --full  # 전체 에이전트를 LLM 모드로 1회 실행
+python -m agents.llm_compare       # LLM 있음/없음 비교: 사건 해석 정확도 + 백테스트 적중률 (결과 data/model/llm_compare.csv)
+python -m agents.llm_compare --n 1 # 강도 자기일관성 끄고 빠르게 (호출 수 약 1/3)
+python -m agents.analog_eval       # Analog Finder 코드 순위 vs Claude 재순위 (정답: data/library/analog_labels.yaml)
+```
+
+### 4-4) 사건 라이브러리 대량 구축 (GDELT + Claude Batch)
+
+```bash
+python -m pipeline.library_builder collect --start 2024-01-01 --end 2024-12-31   # 기사 수집 + 중요도 1차 분류
+python -m pipeline.library_builder submit                                        # 라벨링 배치 제출 (비동기, 할인)
+python -m pipeline.library_builder fetch                                         # 결과 -> data/library/candidates.yaml
+python -m pipeline.library_builder label --limit 5                               # 배치 없이 몇 건만 바로 (시험)
+```
+후보의 clean 판정·날짜 확인은 사람이 하고, 검수한 사건만 events.yaml로 옮깁니다.
+
 ### 5) 에이전트 실행 (헤드쿼터 + 에이전트 7개)
 
 ```bash
 python -m agents.run --event cn_ree_oct_2025 --trace            # 라이브러리 사건을 새 뉴스로 가정
-python -m agents.run --file news.txt --trace                    # 뉴스 텍스트 파일
+python -m agents.run --file news.txt --trace                    # 뉴스 텍스트 파일 (PDF도 가능)
+python -m agents.run --text "https://기사주소"                     # URL -> 본문 추출
+python -m agents.run --text "China expands rare earth export controls"   # 헤드라인 -> 원문 기사 검색
+python -m agents.run --text "..." --force                        # 중요도 1차 분류 무시
+python -m agents.run --list-scenarios                            # 가상 시나리오 목록
+python -m agents.run --scenario sc_taiwan_blockade --trace       # 가상 시나리오 (대만 해협 봉쇄 가정)
+python -m agents.law_effect --event us_chips_2022                # 법령 장기 효과 (20/60/120거래일 업종 초과수익)
 python -m agents.run --event cn_ree_oct_2025 --whatif "반도체 충격 3배"
+python -m agents.run --event cn_ree_oct_2025 --ask "왜 반도체 손실이 제일 커?"   # 후속 질문 (계산 장부 조회)
+python -m agents.run --event cn_ree_oct_2025 --chat             # 후속 질문 대화 모드
 ```
 
 `.env`에 `LLM_API_KEY`가 있으면 Event Analyst(뉴스 해석)와 Reporter(브리핑 문장)가 LLM으로 동작하고, 없으면 키워드 규칙·고정 템플릿으로 동작합니다. 숫자는 어느 경우든 코드가 계산하고, Verifier가 브리핑의 모든 숫자·근거 태그를 계산 장부와 대조해 통과하지 못하면 담당 에이전트로 되돌립니다(최대 2회, 이후 "판단 보류"). 에이전트별 설계는 [docs/agents.md](docs/agents.md)에 있습니다.
 
-### 6) 데모 화면
+### 6) 웹 배포용 데이터 사본
+
+```bash
+python -m pipeline.snapshot        # data/processed, data/model -> data/snapshot (약 1MB)
+```
+
+`data/snapshot` 폴더를 GitHub에 같이 올리면, 웹 앱이 시장 데이터를 내려받지 않고 사본으로 바로 뜹니다. 데이터를 새로 받은 뒤에는 사본도 다시 만듭니다.
+
+### 7) 데모 화면
 
 ```bash
 streamlit run app/streamlit_app.py
@@ -90,7 +148,7 @@ config/      포트폴리오 비중, 팩터 정의, 임계값, 노출 매핑표 
 pipeline/    오프라인 데이터 구축 (수집 → 수익률 → 베타 → 사건 라이브러리 → 분위수)
 engine/      순수 계산 (충격, 리스크, 계산 로그) — LLM 없음
 agents/      헤드쿼터와 에이전트 7개
-tools/       뉴스 검색, 본문 추출, 임베딩
+tools/       news.py(뉴스 검색·기사 본문 추출), docs.py(PDF 읽기·핵심 문장 선별·언어 감지)
 app/         Streamlit 데모
 tests/       단위 테스트
 data/        파이프라인 산출물 (Git 제외)

@@ -28,6 +28,11 @@ def thresholds() -> dict:
     return load_yaml("thresholds.yaml")
 
 
+def scenarios() -> list[dict]:
+    """가상 시나리오 목록 (config/scenarios.yaml)."""
+    return (load_yaml("scenarios.yaml") or {}).get("scenarios", [])
+
+
 def ensure_dirs() -> None:
     for d in (RAW_DIR, PROCESSED_DIR, MODEL_DIR):
         d.mkdir(parents=True, exist_ok=True)

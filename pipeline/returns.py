@@ -3,7 +3,8 @@
 - 바스켓 수익률: 일별 로그수익률
 - 팩터: kind에 따라 로그수익률(price) / 일별 차분(level) / ETF 수익률 차(spread_ret)
 - 날짜 기준: ETF 거래일. FRED는 휴일이 달라 최대 5영업일까지만 직전 값으로 채운다.
-결과: data/processed/returns.parquet, factor_returns.parquet, factor_levels.parquet
+결과: data/processed/returns.parquet, factor_returns.parquet, factor_levels.parquet  (바스켓 시작일 이후 공통 거래일)
+      data/processed/factor_returns_long.parquet  (팩터 장기 시작일 이후, 팩터별로 비어 있을 수 있음)
 """
 from __future__ import annotations
 
@@ -40,24 +41,45 @@ def factor_returns(prices: pd.DataFrame, levels: pd.DataFrame, factor_cfg: dict)
             out[name] = lr[f["long"]] - lr[f["short"]]
         else:
             raise ValueError(f"알 수 없는 팩터 종류: {f['kind']}")
+        if f.get("valid_from"):
+            out[name] = out[name].where(out[name].index >= pd.Timestamp(f["valid_from"]))
     return pd.DataFrame(out).iloc[1:]
 
 
-def build(prices: pd.DataFrame, fred: pd.DataFrame, baskets: dict, factor_cfg: dict):
+def build(prices: pd.DataFrame, fred: pd.DataFrame, baskets: dict, factor_cfg: dict, start: str | None = None):
     rets = basket_returns(prices, baskets)
     levels = factor_levels(fred, prices.index)
     frets = factor_returns(prices, levels, factor_cfg)
-    # 바스켓과 팩터가 모두 있는 날만 남긴다
+    # 바스켓과 팩터가 모두 있는 날만 남긴다 (바스켓 시작일 이후)
     common = rets.dropna().index.intersection(frets.dropna().index)
+    if start:
+        common = common[common >= pd.Timestamp(start)]
     return rets.loc[common], frets.loc[common], levels.loc[common]
+
+
+def build_factor_long(prices: pd.DataFrame, fred: pd.DataFrame, factor_cfg: dict, start: str) -> pd.DataFrame:
+    """팩터만 긴 기간으로. 미국 주식(SPY) 거래일 기준, 아직 데이터가 없는 팩터는 NaN으로 둔다."""
+    days = prices["SPY"].dropna().index if "SPY" in prices else prices.index
+    days = days[days >= pd.Timestamp(start)]
+    levels = factor_levels(fred, days)
+    frets = factor_returns(prices.reindex(days), levels, factor_cfg)
+    return frets.dropna(how="all")
 
 
 def run() -> None:
     prices = pd.read_parquet(config.RAW_DIR / "prices.parquet")
     fred = pd.read_parquet(config.RAW_DIR / "fred.parquet")
-    rets, frets, levels = build(prices, fred, config.portfolio()["baskets"], config.factors()["factors"])
-    if len(rets) < 0.8 * len(prices):
-        print(f"[returns] 경고: 공통 거래일 {len(rets)}일 / ETF {len(prices)}일 -> 데이터 구간이 크게 줄었습니다.")
+    pf = config.portfolio()
+    fcfg = config.factors()["factors"]
+    rets, frets, levels = build(prices, fred, pf["baskets"], fcfg, pf["start_date"])
+    flong = build_factor_long(prices, fred, fcfg, pf.get("factor_start_date", pf["start_date"]))
+    flong.to_parquet(config.PROCESSED_DIR / "factor_returns_long.parquet")
+    first = flong.apply(lambda s: s.first_valid_index())
+    print(f"[returns] 팩터 장기 데이터 {flong.index.min().date()} ~ {flong.index.max().date()} ({len(flong)}일). "
+          f"팩터별 시작: " + ", ".join(f"{k} {v.date()}" for k, v in first.items() if v is not None))
+    n_px = int((prices.index >= pd.Timestamp(pf["start_date"])).sum())
+    if len(rets) < 0.8 * n_px:
+        print(f"[returns] 경고: 공통 거래일 {len(rets)}일 / ETF {n_px}일 -> 데이터 구간이 크게 줄었습니다.")
         print("[returns] FRED 시리즈별 첫 데이터 날짜 (하나만 유독 늦으면 그 시리즈가 원인):")
         print(fred.apply(lambda s: s.first_valid_index()).to_string())
     rets.to_parquet(config.PROCESSED_DIR / "returns.parquet")

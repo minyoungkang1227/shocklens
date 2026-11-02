@@ -1,0 +1,44 @@
+# 공급망 의존도 표 (Exposure Analyst 보강). 사건이 조건에 맞으면 해당 바스켓 노출을 끌어올리고 근거를 남긴다.
+# 조건: instruments(수단 목록, 비우면 무관) AND (sectors_any 또는 countries_any 중 하나라도 겹침)
+# 등급과 근거는 공개 자료 기반의 정성 판단(초안). 실제 보유 종목이 있으면 기업별 매출·공급처 국가로 대체한다.
+
+links:
+  - id: rare_earth_magnets
+    label: 희토류·영구자석
+    why: 정제·가공 단계를 중국이 대부분 맡고 있어 단기 대체가 어려움
+    instruments: [resource_export_control, chokepoint_disruption]
+    sectors_any: [critical_minerals, defense, autos]
+    countries_any: []
+    baskets: {semis: high, us_equity: mid, jp_equity: mid, eu_equity: mid}
+
+  - id: gallium_germanium
+    label: 갈륨·게르마늄 등 반도체 소재
+    why: 화합물 반도체·광학 소재 원료 공급이 중국에 집중
+    instruments: [resource_export_control]
+    sectors_any: [semiconductor]
+    countries_any: []
+    baskets: {semis: high, tw_equity: mid}
+
+  - id: taiwan_foundry
+    label: 대만 첨단 파운드리
+    why: 최첨단 반도체 위탁생산이 대만에 집중되어 공급 차단 시 전 세계 기술 기업이 영향
+    instruments: [chokepoint_disruption, financial_sanction, tariff]
+    sectors_any: []
+    countries_any: [TW]
+    baskets: {semis: high, tw_equity: high, us_equity: mid, jp_equity: mid}
+
+  - id: chip_equipment_china_sales
+    label: 반도체 장비의 중국 매출
+    why: 미국·일본·유럽 장비 업체 매출에서 중국 비중이 커 대중 통제 시 실적 직격
+    instruments: [tech_export_control, entity_list, investment_restriction]
+    sectors_any: [semiconductor]
+    countries_any: []
+    baskets: {semis: high, jp_equity: mid, eu_equity: mid}
+
+  - id: gulf_energy_route
+    label: 걸프 원유·LNG 해상로
+    why: 아시아 수입국의 원유·LNG 상당 부분이 호르무즈 해협을 통과
+    instruments: [chokepoint_disruption, financial_sanction]
+    sectors_any: [energy, shipping]
+    countries_any: [IR, SA]
+    baskets: {in_equity: mid, jp_equity: mid, eu_equity: mid, infra_realty: mid}

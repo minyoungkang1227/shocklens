@@ -6,8 +6,11 @@
 3. 태그: 숫자가 있는 문장은 [calc] 또는 [src] 필수, [src:id]는 실제 근거 목록에 있어야 함 -> Reporter
 4. 무태그 문장: 소제목이 아닌 본문 문장에 태그가 하나도 없으면 -> Reporter
 5. 방향 모순: 사건 효과가 +인데 "위험 감소"라고 쓰는 등 -> Reporter
+5-2. 기간·가정 오표기: 3거래일 시나리오 수익률을 '20거래일'로, 정규분포 가정 ES를 '평상시'로 부르면 -> Reporter
+5-3. 주입 의심 인용: 뉴스 안 지시문 의심 문장([src:s3] 등)을 근거로 인용하면 -> Reporter
 6. 근거 부족: 사건의 필수 필드(수단·발동국·대상국)에 뉴스 근거가 없으면 -> Event Analyst
-7. (선택) LLM 사실 검사: 근거 목록으로 뒷받침되지 않는 주장 문장 -> Reporter
+7. (선택) LLM 사실 검사: 근거 목록으로 뒷받침되지 않는 주장 문장 -> Reporter (warn 모드면 경고만)
+   작성자와 검증자를 나누기 위해 Reporter와 다른 모델(기본 claude-haiku-5-5)을 쓴다.
 """
 from __future__ import annotations
 
@@ -38,7 +41,10 @@ def _sentences(text: str) -> list[str]:
 
 
 def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_result: dict, event: dict,
-          llm: LLM | None = None, use_llm: bool = False) -> dict:
+          llm: LLM | None = None, use_llm: bool = False, llm_mode: str = "reject") -> dict:
+    """llm: 작성자(Reporter)와 다른 모델을 넘기는 것을 권장 (설정 llm.verifier_model).
+    llm_mode: reject = LLM 지적도 반려 / warn = 경고로만 기록하고 통과 여부엔 반영 안 함"""
+    warnings: list[str] = []
     issues: list[Issue] = []
     # 1
     left = sorted(set(re.findall(r"\{\{([A-Z0-9_]+)\}\}", final)))
@@ -64,6 +70,23 @@ def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_resul
                                         route="reporter"))
         if not TAG.search(s) and len(s) > 15 and "판단 보류" not in s:
             issues.append(Issue(kind="untagged", detail=f"근거 태그 없는 문장: {s[:50]}", route="reporter"))
+    # 4-2 기간·가정 오표기: 3거래일 시나리오 값을 20거래일로, 정규분포 ES를 '평상시'로 부르는 경우
+    other_vals = {v for k, v in facts.items() if not k.startswith("LOSS_")}
+    loss_vals = {facts[k] for k in ("LOSS_MILD", "LOSS_CENTRAL", "LOSS_SEVERE") if facts.get(k)}
+    # 다른 사실값과 글자가 겹치는 값(예: +0.00% 가 +0.00%p 안에)은 오탐을 막기 위해 '%p'가 붙지 않은 경우만 본다
+    loss_rx = [re.compile(re.escape(v) + r"(?![p\d])") for v in loss_vals]
+    nmc = facts.get("NORMAL_MC_ES")
+    for s in _sentences(final):
+        if any(r.search(s) for r in loss_rx) and "20거래일" in s and "3거래일" not in s:
+            issues.append(Issue(kind="label", detail=f"3거래일 시나리오 수익률을 20거래일로 표기: {s[:50]}", route="reporter"))
+        if nmc and nmc in s and "정규" not in s:
+            issues.append(Issue(kind="label", detail=f"정규분포 가정 ES를 다른 이름으로 표기: {s[:50]}", route="reporter"))
+    # 5-3 지시문 의심 문장 인용
+    bad = {f["id"] for f in event.get("injection_flags") or []}
+    for sid in SRC.findall(final):
+        for one in sid.split(","):
+            if one.strip() in bad:
+                issues.append(Issue(kind="injection", detail=f"지시문 의심 문장 {one.strip()} 을 근거로 인용", route="reporter"))
     # 5
     eff = risk_result["decomposition"]["event_effect_ES"]
     if eff > 0.0005 and UP_BAD.search(final):
@@ -80,11 +103,16 @@ def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_resul
             res = llm.complete_json(
                 "당신은 사실 검증관입니다. 브리핑 문장 중 주어진 근거(sources)로 뒷받침되지 않는 주장만 찾습니다. "
                 "숫자와 [calc] 문장은 검사하지 않습니다. JSON {\"unsupported\": [문장 앞부분]} 만 출력.",
-                json.dumps({"brief": final, "sources": sources}, ensure_ascii=False))
+                json.dumps({"brief": final, "sources": sources}, ensure_ascii=False),
+                schema={"type": "object", "properties": {"unsupported": {"type": "array", "items": {"type": "string"}}},
+                        "required": ["unsupported"]}, name="emit")
             for s in (res or {}).get("unsupported", [])[:5]:
-                issues.append(Issue(kind="unsupported", detail=f"근거로 뒷받침 안 됨: {s[:60]}", route="reporter"))
-        except Exception:
-            pass
+                if llm_mode == "warn":
+                    warnings.append(f"[{getattr(llm, 'model', 'LLM')}] 근거로 뒷받침 안 될 수 있음: {s[:60]}")
+                else:
+                    issues.append(Issue(kind="unsupported", detail=f"근거로 뒷받침 안 됨: {s[:60]}", route="reporter"))
+        except Exception as e:
+            warnings.append(f"LLM 사실 검사 생략: {type(e).__name__}")
     # 중복 제거
     seen, uniq = set(), []
     for i in issues:
@@ -95,4 +123,5 @@ def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_resul
     routes = [i.route for i in uniq]
     route = "event_analyst" if "event_analyst" in routes else ("shock_mapper" if "shock_mapper" in routes else
                                                              ("reporter" if routes else None))
-    return {"passed": not uniq, "issues": [i.model_dump() for i in uniq], "route": route}
+    return {"passed": not uniq, "issues": [i.model_dump() for i in uniq], "route": route, "warnings": warnings,
+            "checker_model": getattr(llm, "model", None) if use_llm and llm is not None and llm.enabled else None}

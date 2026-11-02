@@ -1,6 +1,8 @@
 # 지경학 사건 라이브러리 (손으로 정리, Git에 포함)
 # 날짜는 발표일(현지 기준). 미국 시장 기준 첫 거래일부터 반응 구간을 잡는다(주말 발표는 다음 월요일부터).
-# severity(강도)는 임시값이며, 사건이 15건 모이면 GPR·TPU와 실제 변동으로 다시 맞춘다.
+# severity(강도 1~5)는 severity_components(6요소 1~5: 범위·즉시성·대체가능성·확전단계·당사국규모·예상밖)에서
+#   코드가 계산한 0~100 점수의 등급이다(engine/severity.py). 요소 점수는 사건 설명·출처를 보고 매긴 초안이며,
+#   사건이 쌓이면 실제 반응 크기에 회귀해 요소 가중치를 다시 정한다.
 # instrument(수단): tariff, tariff_pause, tech_export_control, entity_list, resource_export_control,
 #                   currency, financial_sanction
 # direction: escalate(확대, 기본값) / ease(완화). 유사 사례는 방향이 같은 사건끼리만 쓴다.
@@ -8,6 +10,10 @@
 # channels: 이 사건이 움직였을 것으로 보는 팩터와 방향(+1 상승 / -1 하락). 충격은 이 팩터만 쓴다.
 #           credit = HYG-IEF 이므로 신용 경색은 -1.
 # confounders: 같은 기간에 겹친 다른 큰 사건. 분석할 때 해석을 조심해야 한다.
+# react_from: (선택) 장 마감 후·주말 발표라 반응이 다음 거래일부터 시작하면 그 날짜. 없으면 date부터.
+# 2012년 이전 사건: 바스켓 데이터가 없어 팩터 반응만 잰다(충격 크기 산정에만 쓰고 백테스트 대상은 아님).
+#   팩터별 데이터 시작: 기술전쟁 2001, 달러 2006, 신용 2007, 위안화 2005-07-21(그 전은 페그제).
+#   2008-07~2010-06에도 위안화는 사실상 재고정되어 그 기간 사건은 위안화 채널을 쓰지 않는다.
 # clean: 반응 창(발표 후 3거래일) 안에 이 사건과 무관한 큰 충격이 없으면 true.
 #        false인 사건은 유사 사례(충격 크기 산정)에서 빼고, 검증 결과도 따로 해석한다.
 #        같은 분쟁의 맞대응(예: 미국 통제 직후 중국 보복)은 같은 에피소드로 보고 clean으로 둔다.
@@ -25,6 +31,7 @@ events:
     sectors: [semiconductor, industrials]
     stage: announce
     severity: 3
+    severity_components: {scope: 4, immediacy: 2, substitut: 2, escalation: 1, parties: 5, surprise: 3}
     channels: {risk_off: 1, tech_war: -1, cny: 1}
     description: >
       트럼프 대통령이 301조 조사(기술이전·지재권) 결과를 근거로 항공우주·정보통신·로봇·기계 등
@@ -45,6 +52,7 @@ events:
     sectors: [industrials, semiconductor]
     stage: escalate
     severity: 3
+    severity_components: {scope: 4, immediacy: 4, substitut: 2, escalation: 3, parties: 5, surprise: 5}
     channels: {risk_off: 1, tech_war: -1, cny: 1}
     description: >
       협상이 타결에 가까워 보이던 시점에 일요일 트윗으로 관세 인상과 3250억 달러 추가 관세를 예고.
@@ -57,6 +65,7 @@ events:
 
   - id: us_huawei_2019
     date: "2019-05-15"
+    react_from: "2019-05-16"     # 5/15 장 마감 후 발표
     title: 미국 상무부, 화웨이와 계열사 68곳 엔티티 리스트 지정 (5/16 효력)
     instrument: entity_list
     direction: escalate
@@ -65,6 +74,7 @@ events:
     sectors: [semiconductor, telecom]
     stage: enforce
     severity: 3
+    severity_components: {scope: 2, immediacy: 5, substitut: 4, escalation: 3, parties: 5, surprise: 3}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       화웨이에 미국산 부품·소프트웨어·기술을 팔려면 허가가 필요해짐. 같은 날 정보통신 공급망 국가비상사태 행정명령.
@@ -84,6 +94,7 @@ events:
     sectors: [agriculture]
     stage: retaliate
     severity: 4
+    severity_components: {scope: 5, immediacy: 5, substitut: 3, escalation: 4, parties: 5, surprise: 4}
     channels: {cny: 1, risk_off: 1, tech_war: -1}
     description: >
       인민은행이 기준환율을 예상보다 약하게 고시해 위안화가 2008년 이후 처음 7위안을 넘었고,
@@ -106,6 +117,7 @@ events:
     sectors: [banks, energy]
     stage: enforce
     severity: 4
+    severity_components: {scope: 4, immediacy: 4, substitut: 4, escalation: 3, parties: 4, surprise: 2}
     channels: {oil: 1, risk_off: 1, credit: -1}
     description: >
       공동성명으로 일부 러시아 은행의 SWIFT 배제와 중앙은행 외환보유액 사용 제한을 약속. 토요일 발표라 반응은 2/28부터.
@@ -126,6 +138,7 @@ events:
     sectors: [semiconductor]
     stage: enforce
     severity: 3
+    severity_components: {scope: 4, immediacy: 4, substitut: 4, escalation: 2, parties: 5, surprise: 2}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       첨단 컴퓨팅 칩, 슈퍼컴퓨터, 반도체 제조장비의 대중 수출을 허가제로 묶은 대규모 통제.
@@ -145,6 +158,7 @@ events:
     sectors: [semiconductor]
     stage: enforce
     severity: 3
+    severity_components: {scope: 3, immediacy: 3, substitut: 4, escalation: 3, parties: 5, surprise: 1}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       칩 성능 기준을 조정해 통제 대상을 넓히고, 장비 통제와 엔티티 리스트(13곳)를 보강.
@@ -165,6 +179,7 @@ events:
     sectors: [semiconductor]
     stage: announce
     severity: 3
+    severity_components: {scope: 2, immediacy: 2, substitut: 5, escalation: 2, parties: 5, surprise: 3}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       중국 상무부와 해관총서가 반도체 원료인 갈륨·게르마늄 관련 품목에 수출 허가제를 도입한다고 발표.
@@ -187,6 +202,7 @@ events:
     sectors: [semiconductor, defense]
     stage: enforce
     severity: 3
+    severity_components: {scope: 2, immediacy: 5, substitut: 5, escalation: 4, parties: 5, surprise: 2}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       중국 상무부 공고 2024년 제46호. 이중용도 품목인 갈륨·게르마늄·안티몬·초경질 소재의 대미 수출을
@@ -207,6 +223,7 @@ events:
     sectors: [semiconductor, defense, autos]
     stage: retaliate
     severity: 4
+    severity_components: {scope: 3, immediacy: 5, substitut: 5, escalation: 4, parties: 5, surprise: 2}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       상무부·해관총서 공고 2025년 제18호. 사마륨·가돌리늄·테르븀·디스프로슘·루테튬·스칸듐·이트륨 관련 품목을
@@ -227,6 +244,7 @@ events:
     sectors: [semiconductor, defense, autos]
     stage: escalate
     severity: 4
+    severity_components: {scope: 5, immediacy: 4, substitut: 5, escalation: 4, parties: 5, surprise: 4}
     channels: {tech_war: -1, risk_off: 1, cny: 1}
     description: >
       중국산 희토류가 0.1% 이상 들어간 해외 제품까지 허가 대상으로 넓히고(역외 적용), 희토류 채굴·제련·자석 기술도 통제.
@@ -248,6 +266,7 @@ events:
     sectors: [industrials, semiconductor]
     stage: ease
     severity: 4
+    severity_components: {scope: 5, immediacy: 5, substitut: 1, escalation: 2, parties: 5, surprise: 5}
     channels: {risk_off: -1, tech_war: 1, credit: 1}
     description: >
       상호관세 시행 약 14시간 만에 중국을 뺀 국가에 90일 유예와 10% 기본관세를 발표. 같은 날 S&P500 급반등.
@@ -267,6 +286,7 @@ events:
     sectors: [industrials, semiconductor]
     stage: ease
     severity: 3
+    severity_components: {scope: 5, immediacy: 4, substitut: 1, escalation: 2, parties: 5, surprise: 3}
     channels: {risk_off: -1, tech_war: 1, cny: -1}
     description: >
       제네바 협상 결과로 미국의 대중 관세는 30%, 중국의 대미 관세는 10%로 낮추고 90일간 협상하기로 합의.
@@ -275,3 +295,283 @@ events:
       - https://www.fredlaw.com/alert-u-s-tariffs-update-may-12-2025
     confounders: [5/13 4월 CPI 발표]
     clean: true
+
+  # ---------------- 2002~2010: 팩터 반응만 있는 과거 사건 (2026-11-02 추가) ----------------
+  - id: us_steel_2002
+    date: "2002-03-05"
+    title: 부시 행정부, 수입 철강 세이프가드 관세(8~30%) 발표
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [EU, JP, KR, CN]
+    sectors: [industrials]
+    stage: announce
+    severity: 2
+    severity_components: {scope: 2, immediacy: 3, substitut: 1, escalation: 1, parties: 3, surprise: 2}
+    channels: {risk_off: 1}
+    description: >
+      무역법 201조 세이프가드로 주요 철강 제품에 3년간 8~30% 관세를 부과한다고 발표(3/20 시행).
+      EU가 즉시 보복을 예고. 철강에 한정된 조치라 시장 전반 영향은 제한적이었다.
+    sources:
+      - https://georgewbush-whitehouse.archives.gov/news/releases/2002/03/20020305-1.html
+      - https://www.rieti.go.jp/en/columns/a01_0034.html
+    confounders: []
+    clean: true
+
+  - id: cn_depeg_2005
+    date: "2005-07-21"
+    title: 중국, 위안화 달러 페그 폐지와 2.1% 절상 (복수통화 바스켓 관리변동)
+    instrument: currency
+    direction: ease
+    initiator: CN
+    target: [US]
+    sectors: []
+    stage: ease
+    severity: 2
+    severity_components: {scope: 3, immediacy: 5, substitut: 2, escalation: 1, parties: 5, surprise: 4}
+    channels: {cny: -1, risk_off: -1}
+    description: >
+      인민은행이 10년간 유지한 달러당 8.28위안 페그를 폐지하고 8.11위안으로 절상. 미국 의회의 보호무역 압력을
+      완화하는 조치로 받아들여졌다(완화 방향). 위안화 채널은 이 날부터 데이터가 의미를 가진다.
+    sources:
+      - https://www.aljazeera.com/news/2005/7/21/china-revalues-currency
+      - https://www.industryweek.com/the-economy/article/21948183/us-industry-groups-hope-for-further-china-yuan-moves
+    confounders: []
+    clean: true
+
+  - id: us_tire_2009
+    date: "2009-09-11"
+    react_from: "2009-09-14"     # 금요일 밤 발표
+    title: 오바마 행정부, 중국산 타이어 세이프가드 관세(35%) 부과
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [autos, industrials]
+    stage: enforce
+    severity: 2
+    severity_components: {scope: 1, immediacy: 3, substitut: 1, escalation: 1, parties: 5, surprise: 2}
+    channels: {risk_off: 1}
+    description: >
+      무역법 421조로 중국산 승용차·경트럭 타이어에 3년간 35·30·25% 추가 관세. 중국은 9/13 미국산 닭고기·자동차 부품
+      반덤핑 조사로 맞대응(같은 에피소드). 위안화가 재고정되던 시기라 위안화 채널은 쓰지 않는다.
+    sources:
+      - https://www.presidency.ucsb.edu/documents/memorandum-imports-certain-passenger-vehicle-and-light-truck-tires-from-the-peoples
+      - https://tyrepress.com/2009/09/us-imposes-35-tyre-tariff-china-plays-chicken
+    confounders: [9/13 중국의 맞대응 조사 발표 - 같은 분쟁의 맞대응]
+    clean: true
+
+  - id: cn_ree_jp_2010
+    date: "2010-09-22"
+    react_from: "2010-09-23"     # NYT 보도(9/22 홍콩발) 이후 첫 미국 거래일
+    title: 중국, 센카쿠 어선 충돌 이후 대일 희토류 수출 사실상 중단
+    instrument: resource_export_control
+    direction: escalate
+    initiator: CN
+    target: [JP]
+    sectors: [critical_minerals, semiconductor, autos]
+    stage: enforce
+    severity: 3
+    severity_components: {scope: 2, immediacy: 5, substitut: 5, escalation: 3, parties: 3, surprise: 4}
+    channels: {tech_war: -1, risk_off: 1}
+    description: >
+      어선 선장 구금에 대한 대응으로 중국 기업들의 대일 희토류 수출이 9/21경부터 멈췄다는 보도.
+      중국 정부는 공식 금수는 부인. 9/24 일본이 선장을 석방하며 긴장이 일부 완화(같은 에피소드).
+      현재 희토류 통제 사건들의 가장 오래된 비교 사례.
+    sources:
+      - https://www.globaltradealert.org/state-act/2092/china-temporary-export-restrictions-on-rare-earth-minerals-to-japan
+      - https://phys.org/news/2010-09-traders-china-halts-rare-earth.html
+    confounders: [9/24 일본의 선장 석방 - 같은 에피소드의 완화]
+    clean: true
+
+  # ---------------- 2014~2024 추가 사건 (2026-11-02 추가) ----------------
+  - id: ru_crimea_2014
+    date: "2014-03-17"
+    title: 미국·EU, 크림반도 합병 관련 러시아 고위 인사 제재
+    instrument: financial_sanction
+    direction: escalate
+    initiator: US
+    target: [RU]
+    sectors: [banks, energy, defense]
+    stage: announce
+    severity: 2
+    severity_components: {scope: 1, immediacy: 5, substitut: 1, escalation: 1, parties: 4, surprise: 1}
+    channels: {oil: 1, risk_off: 1}
+    description: >
+      크림 주민투표 다음 날 미국(행정명령 13661)과 EU가 러시아·우크라이나 인사 자산동결·여행금지.
+      개인 대상의 제한적 제재라 시장 영향은 작았다.
+    sources:
+      - https://www.skadden.com/insights/publications/2014/03/an-update-on-economic-sanctions-related-to-events
+      - https://www.jdsupra.com/legalnews/us-and-eu-impose-additional-sanctions-on-15773/
+    confounders: [3/19 FOMC(옐런 '6개월' 발언으로 금리 급등) - 반응 창 3일째]
+    clean: false
+
+  - id: us_steel_2018
+    date: "2018-03-01"
+    title: 트럼프, 철강 25%·알루미늄 10% 관세 예고 (232조)
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [CN, EU, JP, CA]
+    sectors: [industrials, autos]
+    stage: announce
+    severity: 3
+    severity_components: {scope: 2, immediacy: 2, substitut: 1, escalation: 1, parties: 4, surprise: 4}
+    channels: {risk_off: 1, tech_war: -1}
+    description: >
+      철강·알루미늄 업계 간담회에서 다음 주 관세 부과를 발표. EU·캐나다가 보복을 예고하며 무역전쟁 우려가 커졌다.
+    sources:
+      - https://voanews.com/a/us-markets-fall-on-steel-aluminum-tariffs-announcement/4276269.html
+      - https://republicofmining.com/2018/03/01/trump-says-u-s-to-impose-steep-tariffs-on-steel-aluminum-imports-by-steve-holland-and-ginger-gibson-reuters-u-s-march-1-2018
+    confounders: [파월 의장 의회 증언(2/27~3/1) 이후 금리 인상 가속 우려가 같이 반영]
+    clean: false
+
+  - id: us_iran_2018
+    date: "2018-05-08"
+    title: 미국, 이란 핵합의(JCPOA) 탈퇴와 제재 재부과 발표
+    instrument: financial_sanction
+    direction: escalate
+    initiator: US
+    target: [IR]
+    sectors: [energy, banks]
+    stage: announce
+    severity: 3
+    severity_components: {scope: 3, immediacy: 2, substitut: 3, escalation: 2, parties: 4, surprise: 2}
+    channels: {oil: 1, risk_off: 1}
+    description: >
+      트럼프 대통령이 핵합의 탈퇴와 '최고 수준' 제재 재부과를 발표(통화·금속 8/6, 원유·금융 11/4).
+      발표 당일 유가는 급락 후 반등했고 다음 날 3년 반 만의 최고치.
+    sources:
+      - https://gcaptain.com/president-trump-is-withdrawing-the-united-states-from-the-iran-nuclear-deal/
+      - https://www.meed.com/board-report-june-2018/
+    confounders: [5/10 4월 CPI 발표(시장 영향 작음)]
+    clean: true
+
+  - id: jp_kr_2019
+    date: "2019-07-01"
+    title: 일본, 대한국 반도체 소재 3종(불화수소·포토레지스트·폴리이미드) 수출규제 발표
+    instrument: tech_export_control
+    direction: escalate
+    initiator: JP
+    target: [KR]
+    sectors: [semiconductor]
+    stage: announce
+    severity: 2
+    severity_components: {scope: 1, immediacy: 4, substitut: 4, escalation: 1, parties: 3, surprise: 4}
+    channels: {tech_war: -1}
+    description: >
+      일본 경제산업성이 반도체·디스플레이 소재 3종의 포괄 수출허가를 개별 허가로 바꾼다고 발표(7/4 시행).
+      강제징용 판결을 둘러싼 갈등이 배경.
+    sources:
+      - https://taxnews.ey.com/news/2019-1553-japan-announces-stringent-licensing-procedures-for-exports-to-korea
+      - https://globaltradealert.org/state-act/82104-japan-government-announces-export-control-measures-to-the-repulic-of-korea
+    confounders: [6/29 G20 오사카 미중 무역휴전 합의 직후 첫 거래일(시장은 휴전에 반응해 상승)]
+    clean: false
+
+  - id: us_fdpr_2020
+    date: "2020-05-15"
+    title: 미국 상무부, 화웨이 겨냥 해외직접생산품규칙(FDPR) 확대
+    instrument: tech_export_control
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor, telecom]
+    stage: escalate
+    severity: 3
+    severity_components: {scope: 2, immediacy: 4, substitut: 4, escalation: 3, parties: 5, surprise: 3}
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+    description: >
+      미국 기술·소프트웨어로 만든 해외 생산 반도체도 화웨이에 공급하려면 허가를 받도록 규칙을 확대(즉시 시행, 120일 유예).
+      중국은 '신뢰할 수 없는 기업 명단'으로 대응을 예고.
+    sources:
+      - https://www.wilmerhale.com/en/insights/client-alerts/20200519-commerce-department-escalates-us-china-technology-competition-targeting-huawei-again
+      - https://wiley.law/alert-Commerce-Ramps-Up-Huawei-Export-Restrictions-Foreign-Suppliers-Beware
+    confounders: [코로나19 초기 고변동성 국면, 5/18 백신 임상 결과 발표로 급반등]
+    clean: false
+
+  - id: us_outbound_2023
+    date: "2023-08-09"
+    react_from: "2023-08-10"     # 장 마감 후 발표
+    title: 바이든, 대중 첨단기술(반도체·양자·AI) 해외투자 제한 행정명령
+    instrument: investment_restriction
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor]
+    stage: announce
+    severity: 2
+    severity_components: {scope: 2, immediacy: 1, substitut: 2, escalation: 1, parties: 5, surprise: 1}
+    channels: {tech_war: -1, cny: 1}
+    description: >
+      미국인의 중국 반도체·양자·AI 기업 투자를 금지하거나 신고하도록 하는 프로그램 신설. 예상보다 범위가 좁고 시행이 늦어
+      시장 영향은 제한적이었다.
+    sources:
+      - https://www.paulweiss.com/insights/client-memos/president-biden-issues-executive-order-creating-unprecedented-outbound-investment-review-prohibitions-targeting-china
+      - https://www.venable.com/insights/publications/2023/08/biden-administration-issues-long-anticipated
+    confounders: [8/10 7월 CPI 발표 - 반응 창 첫날]
+    clean: false
+
+  - id: us_ev_2024
+    date: "2024-05-14"
+    title: 바이든, 중국산 전기차 관세 100%·반도체 50% 등 301조 관세 인상
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [autos, semiconductor, battery]
+    stage: announce
+    severity: 2
+    severity_components: {scope: 2, immediacy: 3, substitut: 1, escalation: 2, parties: 5, surprise: 1}
+    channels: {cny: 1, tech_war: -1}
+    description: >
+      180억 달러 규모 중국산 제품의 관세 인상. 전기차 100%(4배), 반도체 50%(2025년), 배터리 25% 등.
+      실제 수입 규모가 작아 상징적 성격이 강하다는 평가.
+    sources:
+      - https://apps.digitimes.com/news/a20240515VL203.html
+      - https://www.cbsnews.com/news/biden-to-announce-new-100-tariffs-on-chinese-evs
+    confounders: [5/15 4월 CPI 발표 후 증시 사상 최고치 - 반응 창 2일째]
+    clean: false
+
+  # ---------------- 산업정책 법령 (장기 효과 분석용, clean: false -> 단기 충격 추정에는 쓰지 않음) ----------------
+  - id: us_ira_2022
+    date: "2022-07-27"
+    react_from: "2022-07-28"     # 장 마감 후 발표
+    title: 슈머·맨친, 인플레이션 감축법(IRA) 기습 합의 (청정에너지 3,698억 달러, 8/16 서명)
+    instrument: industrial_subsidy
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [energy, battery, autos]
+    stage: announce
+    severity: 3
+    severity_components: {scope: 4, immediacy: 2, substitut: 3, escalation: 1, parties: 3, surprise: 5}
+    channels: {cny: 1}
+    description: >
+      협상 결렬로 알려졌던 기후·세제 법안이 기습 합의로 부활. 청정에너지 세액공제에 북미 생산·
+      우려 국가(중국 등) 배제 요건이 붙어 공급망 재편을 유도하는 산업정책 법령.
+    sources:
+      - https://www.rollcall.com/2022/07/27/manchin-schumer-reach-deal-on-climate-health-tax-measure
+      - https://www.whitehouse.gov/briefing-room/statements-releases/2022/07/27/statement-from-president-biden-on-inflation-reduction-act-of-2022/
+    confounders: [7/27 FOMC 75bp 인상(같은 날), 7/28 2분기 GDP 발표]
+    clean: false
+
+  - id: us_chips_2022
+    date: "2022-08-09"
+    title: 바이든, 반도체법(CHIPS and Science Act) 서명 (반도체 제조 지원 527억 달러)
+    instrument: industrial_subsidy
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor]
+    stage: enforce
+    severity: 2
+    severity_components: {scope: 3, immediacy: 3, substitut: 3, escalation: 1, parties: 3, surprise: 1}
+    channels: {tech_war: 1}
+    description: >
+      7/27 상원, 7/28 하원 통과 후 서명. 보조금을 받는 기업의 중국 내 첨단 생산 확대를 제한하는
+      가드레일 포함. 통과 시점에 이미 알려져 서명일의 의외성은 낮다.
+    sources:
+      - https://www.whitehouse.gov/briefing-room/statements-releases/2022/08/09/fact-sheet-chips-and-science-act-will-lower-costs-create-jobs-strengthen-supply-chains-and-counter-china/
+      - https://www.mayerbrown.com/en/insights/publications/2022/08/president-biden-signs-chips-act-into-law
+    confounders: [8/10 7월 CPI 발표 - 반응 창 첫날]
+    clean: false

@@ -24,18 +24,30 @@ def run(state: dict, ctx: Context) -> dict:
     out = risk.run_stress(ctx.rets, ctx.weights, beta, f_shock, idio, mask, r["horizon_days"], r["block_len"],
                           r["n_paths"], r["var_level"], r["es_level"], seed)
     top = sorted(out["tail_contribution"].items(), key=lambda kv: -kv[1])[:3]
+    try:
+        from engine.structure import structure
+        from pipeline import config
+        jcfg = config.load_yaml("jurisdictions.yaml") or {}
+        out["structure"] = structure({k: float(v) for k, v in ctx.weights.items()}, out["tail_contribution"],
+                                     state["event"], jcfg)
+    except FileNotFoundError:
+        out["structure"] = {}
     result = {
         "scenario_loss": out["scenario_loss"],
         "scenario_loss_factor_only": out["scenario_loss_factor_only"],
         "baseline_normal": out["baseline_normal"],
         "baseline": out["baseline"],
         "stressed": out["stressed"],
+        "stressed_mild": out["stressed_mild"],
+        "stressed_severe": out["stressed_severe"],
         "decomposition": out["decomposition"],
+        "regime_info": state.get("regime_info", {}),
         "normal_mc_ES": out["normal_mc_stressed"]["ES"],
         "es_underestimation_normal": out["es_underestimation_normal"],
         "tail_top3": [[b, float(c)] for b, c in top],
         "regime": regime,
         "horizon_days": r["horizon_days"],
+        "structure": out.get("structure", {}),
     }
     calc_id = calclog.save(
         inputs={"run_id": state.get("run_id"), "event": state["event"],

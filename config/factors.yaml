@@ -20,6 +20,7 @@ factors:
     source: fred
     series: DEXCHUS
     kind: price
+    valid_from: "2005-07-21"   # 그 전에는 달러 페그제라 변동이 없어 의미 없음
   oil:
     label: 유가 (WTI)
     source: fred

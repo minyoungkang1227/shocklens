@@ -32,7 +32,7 @@ def fetch_prices(start: str) -> pd.DataFrame:
     raw = yf.download(tickers, start=start, auto_adjust=True, progress=False)
     # yfinance 버전에 따라 컬럼이 MultiIndex(가격종류, 티커)로 온다
     close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
-    close = close.dropna(how="all").sort_index()
+    close = close.dropna(how="all").sort_index()          # 상장 전 기간은 NaN으로 남는다
     close.index = pd.to_datetime(close.index).tz_localize(None)
     missing = [t for t in tickers if t not in close.columns]
     if missing:
@@ -62,7 +62,8 @@ def fetch_fred(series_list: list[str], start: str) -> pd.DataFrame:
 
 def run() -> None:
     config.ensure_dirs()
-    start = config.portfolio()["start_date"]
+    pf = config.portfolio()
+    start = pf.get("factor_start_date", pf["start_date"])      # 팩터 장기 데이터까지 한 번에 받는다
     fred_ids = [f["series"] for f in config.factors()["factors"].values() if f["source"] == "fred"]
 
     prices = fetch_prices(start)

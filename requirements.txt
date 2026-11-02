@@ -14,5 +14,8 @@ langgraph>=0.2
 pydantic>=2.5
 anthropic>=0.40      # LLM_PROVIDER=anthropic 일 때. openai를 쓰려면 openai 패키지를 따로 설치
 
+# 입력 도구 (PDF 읽기, 기사 본문 추출은 trafilatura가 있으면 더 정확: pip install trafilatura)
+pypdf>=4
+
 # 데모 화면
 streamlit>=1.40

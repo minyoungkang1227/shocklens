@@ -1,0 +1,91 @@
+# 가상 시나리오 라이브러리 (실제 사건이 아님). 뉴스 없이 "이런 일이 생기면?"을 같은 파이프라인으로 돌린다.
+# 필드는 사건 라이브러리와 같다. 강도 6요소는 가정이며, 사용자가 화면·CLI에서 바꿀 수 있다.
+# regime: crisis/normal 로 국면을 강제 (비우면 현재 VIX로 판단)
+# overrides: What-if와 같은 형식의 팩터 덮어쓰기 (비우면 유사 사건·강도 분위수로 충격 산정)
+# 참고: 장기 구조 변화(분절화 등)는 단기 ES로 다 담기지 않는다. 브리핑의 '구조 점검'(블록별 비중·집중도)과 함께 본다.
+
+scenarios:
+  - id: sc_taiwan_blockade
+    title: (가정) 중국의 대만 해협 봉쇄
+    description: >
+      중국이 대만 주변 해역을 봉쇄해 선박 통행과 반도체 수출이 막히는 상황을 가정. 미국·일본이 대응에 나서고
+      첨단 반도체 공급이 끊긴다.
+    instrument: chokepoint_disruption
+    direction: escalate
+    initiator: CN
+    target: [TW, US, JP]
+    sectors: [semiconductor, shipping]
+    stage: escalate
+    severity_components: {scope: 5, immediacy: 5, substitut: 5, escalation: 5, parties: 5, surprise: 4}
+    channels: {risk_off: 1, tech_war: -1, cny: 1, credit: -1}
+    regime: crisis
+
+  - id: sc_hormuz_closure
+    title: (가정) 호르무즈 해협 통행 차단
+    description: >
+      이란과의 충돌로 호르무즈 해협 유조선 통행이 차단되는 상황을 가정. 원유·LNG 공급이 줄고 해상 운임이 급등한다.
+    instrument: chokepoint_disruption
+    direction: escalate
+    initiator: IR
+    target: [GLOBAL, US]
+    sectors: [energy, shipping]
+    stage: escalate
+    severity_components: {scope: 5, immediacy: 5, substitut: 4, escalation: 4, parties: 4, surprise: 4}
+    channels: {oil: 1, risk_off: 1, credit: -1}
+    regime: crisis
+
+  - id: sc_us_cn_full_tariff
+    title: (가정) 미중 전면 관세 재격화
+    description: >
+      관세 유예가 끝나고 미국이 중국산 전 품목에 고율 관세를 다시 매기며 중국도 맞대응하는 상황을 가정.
+    instrument: tariff
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor, autos, industrials, agriculture]
+    stage: retaliate
+    severity_components: {scope: 5, immediacy: 4, substitut: 2, escalation: 4, parties: 5, surprise: 3}
+    channels: {risk_off: 1, tech_war: -1, cny: 1, credit: -1}
+
+  - id: sc_cn_financial_sanction
+    title: (가정) 대중 금융제재 (결제망 배제·외환보유액 동결)
+    description: >
+      대만 유사시 등을 계기로 미국·EU가 중국 주요 은행의 결제망 배제와 중앙은행 외환보유액 동결에 나서는 상황을 가정.
+      국부펀드·중앙은행 자산이 직접 표적이 되는 유형이다.
+    instrument: financial_sanction
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [banks]
+    stage: escalate
+    severity_components: {scope: 5, immediacy: 5, substitut: 4, escalation: 5, parties: 5, surprise: 5}
+    channels: {risk_off: 1, credit: -1, cny: 1, tech_war: -1}
+    sovereign_asset_risk: true
+    regime: crisis
+
+  - id: sc_ree_total_ban
+    title: (가정) 중국 희토류 전면 수출 금지
+    description: >
+      중국이 미국·EU·일본에 희토류와 영구자석 수출을 전면 금지하는 상황을 가정. 반도체·방산·전기차 공급망이 직접 타격받는다.
+    instrument: resource_export_control
+    direction: escalate
+    initiator: CN
+    target: [US, EU, JP]
+    sectors: [semiconductor, defense, autos, critical_minerals]
+    stage: escalate
+    severity_components: {scope: 5, immediacy: 5, substitut: 5, escalation: 4, parties: 5, surprise: 4}
+    channels: {tech_war: -1, risk_off: 1, cny: 1}
+
+  - id: sc_bloc_fragmentation
+    title: (가정) 미중 블록 분절 심화
+    description: >
+      관세·수출통제·투자 제한이 동시에 넓어지며 미국 블록과 중국 블록 사이 교역·투자가 단계적으로 줄어드는 상황을 가정.
+      충격은 천천히 오고 예상된 면이 커서 단기 반응보다 구조 변화(블록별 비중·집중도)가 핵심이다.
+    instrument: investment_restriction
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor, telecom, industrials, battery]
+    stage: escalate
+    severity_components: {scope: 5, immediacy: 2, substitut: 3, escalation: 5, parties: 5, surprise: 2}
+    channels: {risk_off: 1, tech_war: -1, cny: 1, dollar: 1}

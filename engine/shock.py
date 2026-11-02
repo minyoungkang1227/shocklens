@@ -51,13 +51,15 @@ def from_analogs(event_factor_post: pd.DataFrame, analog_ids: list[str],
     if beta is not None and weights is not None:
         w = weights.reindex(beta.index).fillna(0.0)
         w = w / w.sum()
-        impact = (beta.reindex(columns=sub.columns).to_numpy() @ sub.to_numpy().T).T @ w.to_numpy()
-        impact = pd.Series(impact, index=sub.index)          # 사건별 포트폴리오 로그수익률(근사)
+        sub0 = sub.fillna(0.0)                                # 데이터가 없던 팩터(오래된 사건)는 0으로 본다
+        impact = (beta.reindex(columns=sub0.columns).to_numpy() @ sub0.to_numpy().T).T @ w.to_numpy()
+        impact = pd.Series(impact, index=sub0.index)          # 사건별 포트폴리오 로그수익률(근사)
         return pd.DataFrame({
-            "mild": sub.loc[impact.idxmax()],
-            "central": sub.median(),
-            "severe": sub.loc[impact.idxmin()],
+            "mild": sub0.loc[impact.idxmax()],
+            "central": sub.median().fillna(0.0),              # 중앙값은 데이터가 있는 사건들로만
+            "severe": sub0.loc[impact.idxmin()],
         })[SCENARIOS]
+    sub = sub.fillna(0.0)
     out = {}
     for f in sub.columns:
         col = sub[f]
@@ -67,6 +69,64 @@ def from_analogs(event_factor_post: pd.DataFrame, analog_ids: list[str],
             "severe": col.loc[col.abs().idxmax()],
         }
     return pd.DataFrame(out).T[SCENARIOS]
+
+
+def weighted_quantile(values, weights, q: float) -> float:
+    """가중 분위수. 값을 정렬하고 누적 가중치가 q를 넘는 지점을 선형 보간한다."""
+    import numpy as np
+    v = np.asarray(values, dtype=float)
+    w = np.asarray(weights, dtype=float)
+    o = np.argsort(v)
+    v, w = v[o], w[o]
+    cw = (np.cumsum(w) - 0.5 * w) / w.sum()          # 각 점의 가중 중앙 위치
+    return float(np.interp(q, cw, v))
+
+
+def from_analogs_weighted(event_factor_post: pd.DataFrame, weights: dict[str, float], channels: dict[str, int],
+                          quantiles: tuple[float, float, float] = (0.25, 0.5, 0.9)) -> pd.DataFrame:
+    """유사 사건이 여러 건일 때: 유사도 가중 분포로 충격을 잡는다.
+
+    영향 채널 팩터마다 '충격 방향으로 본 크기'(방향 x 값)의 가중 분위수를 구해
+    mild = 25%, central = 50%, severe = 90% 로 쓴다. 채널 밖 팩터는 0.
+    (사건 단위 선택보다 팩터 간 동시성은 덜 보존하지만, 표본이 많을 때 범위를 안정적으로 잡는다)
+    """
+    ids = list(weights)
+    w = [weights[i] for i in ids]
+    out = pd.DataFrame(0.0, index=event_factor_post.columns, columns=SCENARIOS)
+    for f, d in channels.items():
+        if f not in out.index:
+            continue
+        col = event_factor_post.loc[ids, f] * d
+        ok = col.notna().to_numpy()                       # 오래된 사건에서 데이터가 없던 팩터는 빼고 계산
+        if not ok.any():
+            continue
+        mag, ww = col.to_numpy()[ok], [x for x, k in zip(w, ok) if k]
+        for name, q in zip(SCENARIOS, quantiles):
+            out.loc[f, name] = d * weighted_quantile(mag, ww, q)
+    return out
+
+
+def apply_severe_floor(shock: pd.DataFrame, channels: dict[str, int], severity: int, q_up: pd.DataFrame,
+                       q_down: pd.DataFrame, quantile_map: dict[int, float], level_offset: int = -1
+                       ) -> tuple[pd.DataFrame, list[str]]:
+    """severe가 강도 기준 분위수보다 약하면 그 분위수까지 끌어올린다 (비교 사건이 적어 범위가 좁아지는 것 방지).
+
+    기준 = 강도(severity + level_offset)에 해당하는 과거 3거래일 변동 분위수. 기본은 한 단계 아래 강도.
+    돌려주는 값: (보정된 표, 끌어올린 팩터 목록)
+    """
+    out = shock.copy()
+    lvl = min(max(severity + level_offset, 1), 5)
+    q = quantile_map[lvl]
+    raised = []
+    for f, d in channels.items():
+        if f not in out.index:
+            continue
+        table = q_up if d > 0 else q_down
+        floor = float(table.loc[f, _closest(table.columns, q)])
+        if d * out.loc[f, "severe"] < d * floor:
+            out.loc[f, "severe"] = floor
+            raised.append(f)
+    return out, raised
 
 
 def from_severity(channels: dict[str, int], severity: int, q_up: pd.DataFrame, q_down: pd.DataFrame,
@@ -120,9 +180,12 @@ def idio_shock(exposure: dict[str, str], event_resid_post: pd.DataFrame, analog_
     유사 사건이 없으면 0.
     """
     out = pd.DataFrame(0.0, index=baskets, columns=SCENARIOS)
+    analog_ids = [i for i in analog_ids if i in event_resid_post.index]   # 바스켓 데이터 이전 사건은 잔차 없음
     if not analog_ids:
         return out
-    sub = event_resid_post.loc[analog_ids]
+    sub = event_resid_post.loc[analog_ids].dropna()
+    if sub.empty:
+        return out
     sub = sub.sub(sub.median(axis=1), axis=0)          # 횡단면 보정
     for b, lvl in exposure.items():
         if lvl != "high" or b not in sub.columns:

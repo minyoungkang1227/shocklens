@@ -7,9 +7,40 @@
 """
 from __future__ import annotations
 
+from functools import lru_cache
+
 from engine.exposure import RANK, SECTOR_TARGETED, exposure_for
 
 from .context import Context
+
+
+@lru_cache(maxsize=1)
+def supply_links() -> tuple:
+    try:
+        from pipeline import config
+        return tuple((config.load_yaml("supply_chain.yaml") or {}).get("links", []))
+    except FileNotFoundError:
+        return ()
+
+
+def apply_supply_chain(event: dict, grades: dict, reasons: dict, labels: dict, links=None) -> list[str]:
+    """공급망 의존표와 맞으면 노출을 끌어올린다. 반환: 적용된 연결 이름 목록"""
+    hit = []
+    sectors, countries = set(event.get("sectors", [])), {event.get("initiator"), *event.get("target", [])}
+    for ln in (links if links is not None else supply_links()):
+        if ln.get("instruments") and event.get("instrument") not in ln["instruments"]:
+            continue
+        if not (sectors & set(ln.get("sectors_any") or []) or countries & set(ln.get("countries_any") or [])):
+            continue
+        hit.append(ln["label"])
+        for b, lvl in ln.get("baskets", {}).items():
+            if b not in grades:
+                continue
+            if RANK[lvl] > RANK[grades[b]]:
+                grades[b] = lvl
+            extra = f"공급망 {ln['label']}({lvl}: {ln.get('why', '')})"
+            reasons[b] = (reasons[b] + ", " + extra) if b in reasons else f"{labels.get(b, b)}: {extra}"
+    return hit
 
 
 def analyze(event: dict, ctx: Context) -> dict:
@@ -26,6 +57,9 @@ def analyze(event: dict, ctx: Context) -> dict:
         why += [f"국가 {c}({g}{'→mid 제한' if capped and RANK[g] > RANK['mid'] else ''})"
                 for c, g in m.get("countries", {}).items() if c in countries]
         reasons[b] = f"{ctx.labels.get(b, b)}: " + ", ".join(why)
+    chains = apply_supply_chain(event, grades, reasons, ctx.labels)
+    if chains:
+        reasons["_supply_chain"] = "공급망 의존 경로: " + ", ".join(chains)
     if event.get("sovereign_asset_risk"):
         reasons["_sovereign"] = "국부펀드·중앙은행 해외자산이 직접 제재 표적: 보유 자산 동결·회수 위험 별도 점검 필요"
     return {"exposure": grades, "exposure_reasons": reasons}

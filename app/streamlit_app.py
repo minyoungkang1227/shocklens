@@ -29,7 +29,7 @@ except Exception:
     pass
 
 from agents.context import load_context  # noqa: E402
-from agents.hq import run_library_event, run_news, run_whatif  # noqa: E402
+from agents.hq import run_library_event, run_news, run_scenario, run_whatif  # noqa: E402
 from agents.llm import LLM  # noqa: E402
 
 EXAMPLE_NEWS = (
@@ -39,7 +39,7 @@ EXAMPLE_NEWS = (
 )
 NODE_KO = {"event_analyst": "Event Analyst", "analog_finder": "Analog Finder", "exposure_analyst": "Exposure Analyst",
            "shock_mapper": "Shock Mapper", "risk_engine": "Risk Engine", "reporter": "Reporter",
-           "verifier": "Verifier", "hq": "헤드쿼터"}
+           "verifier": "Verifier", "hq": "헤드쿼터", "news_input": "뉴스 입력 도구", "triage": "중요도 1차 분류"}
 
 
 def model_ready() -> bool:
@@ -48,10 +48,20 @@ def model_ready() -> bool:
 
 @st.cache_resource(show_spinner=False)
 def get_context(_version: int):
+    """데이터 준비 순서: 이미 있음 -> 저장소의 사본(data/snapshot) -> 직접 수집(pipeline.run_all)."""
+    from pipeline import snapshot
+    source = "로컬 데이터"
     if not model_ready():
-        from pipeline import run_all
-        run_all.main()
-    return load_context()
+        if snapshot.exists():
+            snapshot.restore()
+            source = f"저장소 사본 (기준일 {snapshot.meta().get('data_version')})"
+        else:
+            from pipeline import run_all
+            run_all.main()
+            source = "방금 수집"
+    ctx = load_context()
+    ctx._data_source = source
+    return ctx
 
 
 # ------------------------------------------------------------------ 사이드바
@@ -68,7 +78,9 @@ with st.sidebar:
         st.success("완료")
 
 if not model_ready():
-    st.info("처음 실행이라 시장 데이터를 내려받고 모델을 만듭니다. 1~2분 걸립니다.")
+    from pipeline import snapshot as _snap
+    if not _snap.exists():
+        st.info("처음 실행이라 시장 데이터를 내려받고 모델을 만듭니다. 1~2분 걸립니다.")
 try:
     with st.spinner("데이터 준비 중..."):
         ctx = get_context(st.session_state.get("ctx_version", 0))
@@ -77,15 +89,35 @@ except Exception as e:
     st.stop()
 
 with st.sidebar:
-    st.write("데이터 기준일:", ctx.data_version)
+    st.write("데이터 기준일:", ctx.data_version, f"({getattr(ctx, '_data_source', '')})")
     st.write("사건 라이브러리:", f"{len(ctx.events)}건 (clean {sum(1 for e in ctx.events if e.get('clean'))}건)")
     st.caption("숫자는 전부 코드가 계산하고, LLM은 뉴스 해석과 문장 작성만 맡습니다. "
                "브리핑의 모든 숫자는 Verifier가 계산 기록과 대조합니다.")
 
 # ------------------------------------------------------------------ 입력
 st.title("ShockLens · 지경학 충격 스트레스테스트")
-mode = st.radio("입력 방식", ["과거 사건으로 시연", "뉴스 붙여넣기"], horizontal=True)
-if mode == "과거 사건으로 시연":
+mode = st.radio("입력 방식", ["과거 사건으로 시연", "뉴스 붙여넣기", "가상 시나리오"], horizontal=True)
+if mode == "가상 시나리오":
+    scs = config.scenarios()
+    pick = st.selectbox("시나리오 (실제 사건 아님)", [s["title"] for s in scs])
+    sc = dict(next(s for s in scs if s["title"] == pick))
+    st.caption(" ".join(str(sc.get("description", "")).split()))
+    c1, c2 = st.columns(2)
+    reg_ko = c1.selectbox("국면 가정", ["시나리오 기본값", "위기 국면", "평상시 국면", "현재 VIX로 판단"])
+    with c2.expander("강도 6요소 조정"):
+        comps = dict(sc.get("severity_components") or {})
+        for k, lab in [("scope", "범위"), ("immediacy", "즉시성"), ("substitut", "대체 어려움"),
+                       ("escalation", "확전"), ("parties", "당사국 규모"), ("surprise", "의외성")]:
+            comps[k] = st.slider(lab, 1, 5, int(comps.get(k, 3)), key=f"sc_{sc['id']}_{k}")
+        sc["severity_components"] = comps
+    if reg_ko != "시나리오 기본값":
+        sc["regime"] = {"위기 국면": "crisis", "평상시 국면": "normal", "현재 VIX로 판단": None}[reg_ko]
+    if st.button("시나리오 실행", type="primary"):
+        with st.spinner("가상 시나리오 계산 중..."):
+            st.session_state["res"] = run_scenario(sc, ctx, llm)
+            st.session_state.pop("whatif", None)
+            st.session_state.pop("chat", None)
+elif mode == "과거 사건으로 시연":
     labels = {f"{e['date']} · {e['title']}" + ("" if e.get("clean") else " (clean: false)"): e["id"]
               for e in sorted(ctx.events, key=lambda e: e["date"], reverse=True)}
     pick = st.selectbox("사건", list(labels))
@@ -95,13 +127,23 @@ if mode == "과거 사건으로 시연":
         with st.spinner("에이전트 실행 중..."):
             st.session_state["res"] = run_library_event(labels[pick], ctx, llm)
             st.session_state.pop("whatif", None)
+            st.session_state.pop("chat", None)
 else:
-    text = st.text_area("뉴스 본문", EXAMPLE_NEWS, height=150)
+    text = st.text_area("뉴스 본문 · 헤드라인 · 기사 URL (한·영·중)", EXAMPLE_NEWS, height=150,
+                        help="URL이면 본문을 가져오고, 헤드라인 한 줄이면 원문 기사를 검색해 붙입니다.")
+    up = st.file_uploader("또는 보고서·기사 PDF/TXT 올리기", type=["pdf", "txt"])
+    force = st.checkbox("중요도 1차 분류와 상관없이 강제 실행", value=False)
     run = st.button("스트레스테스트 실행", type="primary")
-    if run and text.strip():
-        with st.spinner("에이전트 실행 중..."):
-            st.session_state["res"] = run_news(text, ctx, llm)
-            st.session_state.pop("whatif", None)
+    if run:
+        if up is not None:
+            from tools.docs import read_pdf
+            data = up.getvalue()
+            text = read_pdf(data) if up.name.lower().endswith(".pdf") else data.decode("utf-8", "ignore")
+        if text.strip():
+            with st.spinner("에이전트 실행 중..."):
+                st.session_state["res"] = run_news(text, ctx, llm, force=force)
+                st.session_state.pop("whatif", None)
+                st.session_state.pop("chat", None)
 
 res = st.session_state.get("res")
 if not res:
@@ -115,6 +157,9 @@ def show_result(res: dict, title: str) -> None:
         st.success(f"{title} · 검증 통과 · 계산 기록 {res.get('calc_log_id')}")
     elif status == "partial":
         st.warning(f"{title} · 판단 보류 (일부 결과만 제공)")
+    elif status == "skipped":
+        st.info(res.get("final_brief", "중요도 미달로 분석을 생략했습니다"))
+        return
     else:
         st.info(res.get("needs_user", "추가 정보가 필요합니다"))
         return
@@ -125,10 +170,13 @@ def show_result(res: dict, title: str) -> None:
         c1.metric("① 평상시 ES97.5", f"{r['baseline_normal']['ES']:.2%}")
         c2.metric("② 국면 반영", f"{r['baseline']['ES']:.2%}", f"{d['regime_effect_ES'] * 100:+.2f}%p",
                   delta_color="inverse")
-        c3.metric("③ 사건 충격 반영", f"{r['stressed']['ES']:.2%}", f"{d['event_effect_ES'] * 100:+.2f}%p",
-                  delta_color="inverse")
+        c3.metric("③ 사건 충격 반영 (중앙 ~ 최악)", f"{r['stressed']['ES']:.2%} ~ {r['stressed_severe']['ES']:.2%}",
+                  f"{d['event_effect_ES'] * 100:+.2f}%p ~ {d['event_effect_ES_severe'] * 100:+.2f}%p", delta_color="inverse")
         c4.metric("3거래일 시나리오 (중앙)", f"{r['scenario_loss']['central']:+.2%}",
                   f"범위 {r['scenario_loss']['mild']:+.2%} ~ {r['scenario_loss']['severe']:+.2%}", delta_color="off")
+        ri = r.get("regime_info") or {}
+        if ri.get("reason"):
+            st.caption(f"국면 판단({'위기' if r['regime'] == 'crisis' else '평상시'}): {ri['reason']}")
     left, right = st.columns([3, 2])
     with left:
         brief = res.get("final_brief", "").replace("\n### ", "\n##### ").replace("## ", "#### ")
@@ -137,19 +185,68 @@ def show_result(res: dict, title: str) -> None:
         ev = res.get("event", {})
         with st.expander("사건 카드 (Event Analyst)", expanded=True):
             st.write(f"**수단** {ev.get('instrument')} · **방향** {ev.get('direction')} · **단계** {ev.get('stage')} · "
-                     f"**강도** {ev.get('severity')}/5")
+                     f"**강도** {ev.get('severity')}/5 (점수 {ev.get('severity_points', 0):.0f}/100)")
+            if ev.get("severity_components"):
+                from engine.severity import describe
+                st.caption("강도 요소: " + describe(ev["severity_components"]))
             st.write(f"**발동국** {ev.get('initiator')} → **대상국** {', '.join(ev.get('target', []))}")
             st.write(f"**산업** {', '.join(ev.get('sectors', [])) or '-'}")
             st.write(f"**영향 채널** {ev.get('channels')}")
+            if ev.get("severity_samples", 1) > 1:
+                sp = ev.get("severity_spread") or {}
+                st.caption(f"강도 {ev['severity_samples']}회 채점 중앙값 · 요소별 흩어짐 최대 {max(sp.values(), default=0)}"
+                           + (" (흩어짐 큼 → 강도 불확실)" if max(sp.values(), default=0) >= 2 else ""))
             if ev.get("uncertain_fields"):
                 st.caption(f"근거 부족·보정 항목: {', '.join(ev['uncertain_fields'])}")
+            for f in res.get("injection_flags") or ev.get("injection_flags") or []:
+                st.caption(f"🛡 지시문 의심 문장 [{f['id']}] 근거에서 제외: {f['text'][:40]}…")
             st.caption(f"해석 방식: {res.get('event_mode')}")
+            nm, tr = res.get("news_meta") or {}, res.get("triage") or {}
+            if nm:
+                st.caption(f"입력: {nm.get('kind')} · 언어 {nm.get('lang')} · 도구 {nm.get('tool_calls')}회"
+                           + (f" · 출처 {', '.join(nm.get('urls', [])[:2])}" if nm.get("urls") else ""))
+            if tr:
+                st.caption(f"중요도 1차 분류: {tr.get('importance')}/5 [{tr.get('mode')} {tr.get('model') or ''}] {tr.get('reason')}")
         with st.expander(f"유사 과거 사건 (Analog Finder · {res.get('analog_tier')})", expanded=True):
             if res.get("analogs"):
-                st.dataframe(pd.DataFrame([{"사건": a["id"], "점수": a["score"], "근거": a["reason"]}
-                                           for a in res["analogs"]]), hide_index=True, width="stretch")
-            else:
+                st.dataframe(pd.DataFrame([{"사건": a["id"], "등급": {"small": "소", "medium": "중", "large": "대"}.get(a.get("size_class"), ""),
+                                            "구조": a.get("struct"), "문장": a.get("text"), "강도점수": a.get("severity_points"),
+                                            "강도근접": a.get("closeness"), "가중치": a.get("weight"),
+                                            "근거": a["reason"]} for a in res["analogs"]]),
+                             hide_index=True, width="stretch")
+                st.caption(f"충격 산정: {res.get('shock_method')} · 이번 사건 등급: {res.get('size_class')}")
+            for n in res.get("analog_notes", []):
+                st.caption(f"⚠ {n}")
+            if not res.get("analogs"):
                 st.write("유사 사건 없음 → 강도 기반으로 충격을 합성했습니다.")
+        stc = (res.get("risk_result") or {}).get("structure") or {}
+        if stc:
+            with st.expander("구조 점검 (분절화·집중도·국부펀드 고유 위험)"):
+                st.dataframe(pd.DataFrame({"포트폴리오 비중": stc.get("bloc_shares", {}),
+                                           "꼬리손실 기여": stc.get("tail_by_bloc", {})}).style.format("{:.1%}"),
+                             width="stretch")
+                st.caption(f"국가 분산: 유효 {stc.get('effective_countries')}개국 · 상대 블록 관할 자산 "
+                           f"{stc.get('adverse_share', 0):.1%} · 대만 관할 {stc.get('flashpoint_share', 0):.1%} (관할국 근사)")
+        att = res.get("attention") or {}
+        if att:
+            with st.expander("주의도 (사건 직전 보도량)"):
+                if att.get("percentile") is not None:
+                    st.write(f"직전 7일 보도량 백분위 {att['percentile']:.0f} · 평소 대비 {att.get('ratio')}배 · 검색어 `{att['query']}`")
+                    if att.get("note"):
+                        st.caption(att["note"])
+                else:
+                    st.caption(f"측정 생략: {att.get('error')}")
+        if ev.get("instrument") in ("industrial_subsidy", "investment_restriction"):
+            from agents.law_effect import reference_events, summary_rows
+            with st.expander("장기 효과 (법령·산업정책, 참고)"):
+                rows = sum((summary_rows(e, ctx) for e in reference_events(ev["instrument"], ctx)
+                            if e["id"] != ev.get("id")), [])
+                if rows:
+                    st.dataframe(pd.DataFrame(rows).style.format({"excess_60d": "{:+.2%}", "pct_60d": "{:.0f}"}),
+                                 width="stretch")
+                    st.caption("과거 같은 유형 법령 이후 60거래일 미국 주식 대비 초과수익 (pct: 무작위 창 대비 백분위). 인과가 아닌 사후 기록.")
+                else:
+                    st.caption("비교할 과거 같은 유형 법령이 없습니다.")
         with st.expander("직접 노출 (Exposure Analyst)"):
             for b, why in (res.get("exposure_reasons") or {}).items():
                 st.write(f"- {why}")
@@ -170,6 +267,13 @@ def show_result(res: dict, title: str) -> None:
                 st.write(f"- [{i['kind']}] {i['detail']} → {i['route']}")
             if v.get("passed"):
                 st.write("모든 숫자가 계산 기록과 일치하고, 모든 문장에 근거 태그가 있습니다.")
+            for w in v.get("warnings", []):
+                st.caption(f"⚠ {w}")
+            if v.get("checker_model"):
+                st.caption(f"사실 검사 모델: {v['checker_model']} (작성 모델과 분리)")
+            cs = res.get("citation_stats")
+            if cs:
+                st.caption(f"인용 기능: 인용 구간 {cs['cited_spans']}개, 자동 보강 태그 {cs['added_tags']}개, 태그-인용 불일치 {len(cs['mismatch'])}건")
 
 
 show_result(res, "스트레스테스트")
@@ -192,3 +296,26 @@ if res.get("status") == "ok":
         st.metric(f"ES97.5 ({wtext})", f"{e1:.2%}", f"{(e1 - e0) * 100:+.2f}%p vs 기본 시나리오", delta_color="inverse")
         with st.expander("What-if 브리핑 전체"):
             show_result(w, f"What-if: {wtext}")
+
+# ------------------------------------------------------------------ 후속 질문
+if res.get("risk_result"):
+    from agents.followup import answer as follow_answer
+
+    st.divider()
+    st.subheader("후속 질문")
+    st.caption("브리핑에 대해 물어보세요. 답의 숫자는 계산 기록(calc_log)을 조회해 가져오고, 기록에 없는 숫자는 걸러냅니다.")
+    chat = st.session_state.setdefault("chat", [])
+    for m in chat:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+            if m.get("tools"):
+                st.caption("조회한 기록: " + ", ".join(m["tools"]) + f" · {m.get('mode')}")
+    q = st.chat_input("예: 왜 반도체 손실이 제일 커? / 유사 사건은 뭐였어? / 국면 효과가 뭐야?")
+    if q:
+        hist = [{"role": m["role"], "content": m["content"]} for m in chat[-6:]]
+        with st.spinner("계산 기록 조회 중..."):
+            a = follow_answer(q, res, ctx, llm, hist)
+        chat.append({"role": "user", "content": q})
+        chat.append({"role": "assistant", "content": a["answer"], "mode": a["mode"],
+                     "tools": [c["name"] for c in a["tool_calls"]]})
+        st.rerun()

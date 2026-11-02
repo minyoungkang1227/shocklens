@@ -9,7 +9,8 @@
 from __future__ import annotations
 
 RANK = {"none": 0, "mid": 1, "high": 2}
-SECTOR_TARGETED = {"resource_export_control", "tech_export_control", "entity_list"}
+SECTOR_TARGETED = {"resource_export_control", "tech_export_control", "entity_list", "industrial_subsidy",
+                   "investment_restriction"}
 
 
 def exposure_for(event: dict, exposure_map: dict) -> dict[str, str]:

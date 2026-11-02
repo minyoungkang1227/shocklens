@@ -16,6 +16,7 @@ def main() -> None:
     library.run()
     quantiles.run()
     print("[done] data/model/ 에 산출물이 저장됐습니다. 다음: python -m engine.demo")
+    print("       웹 배포용 사본을 갱신하려면: python -m pipeline.snapshot")
 
 
 if __name__ == "__main__":
