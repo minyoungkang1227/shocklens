@@ -29,7 +29,8 @@ except Exception:
     pass
 
 from agents.context import load_context  # noqa: E402
-from agents.hq import run_library_event, run_news, run_scenario, run_whatif  # noqa: E402
+from agents.hq import (run_library_event, run_news, run_reverse, run_scenario, run_whatif,  # noqa: E402
+                       scenario_from_text)
 from agents.llm import LLM  # noqa: E402
 
 EXAMPLE_NEWS = (
@@ -96,27 +97,102 @@ with st.sidebar:
 
 # ------------------------------------------------------------------ 입력
 st.title("ShockLens · 지경학 충격 스트레스테스트")
-mode = st.radio("입력 방식", ["과거 사건으로 시연", "뉴스 붙여넣기", "가상 시나리오"], horizontal=True)
-if mode == "가상 시나리오":
-    scs = config.scenarios()
-    pick = st.selectbox("시나리오 (실제 사건 아님)", [s["title"] for s in scs])
-    sc = dict(next(s for s in scs if s["title"] == pick))
-    st.caption(" ".join(str(sc.get("description", "")).split()))
-    c1, c2 = st.columns(2)
-    reg_ko = c1.selectbox("국면 가정", ["시나리오 기본값", "위기 국면", "평상시 국면", "현재 VIX로 판단"])
-    with c2.expander("강도 6요소 조정"):
-        comps = dict(sc.get("severity_components") or {})
-        for k, lab in [("scope", "범위"), ("immediacy", "즉시성"), ("substitut", "대체 어려움"),
-                       ("escalation", "확전"), ("parties", "당사국 규모"), ("surprise", "의외성")]:
-            comps[k] = st.slider(lab, 1, 5, int(comps.get(k, 3)), key=f"sc_{sc['id']}_{k}")
-        sc["severity_components"] = comps
-    if reg_ko != "시나리오 기본값":
-        sc["regime"] = {"위기 국면": "crisis", "평상시 국면": "normal", "현재 VIX로 판단": None}[reg_ko]
-    if st.button("시나리오 실행", type="primary"):
-        with st.spinner("가상 시나리오 계산 중..."):
-            st.session_state["res"] = run_scenario(sc, ctx, llm)
-            st.session_state.pop("whatif", None)
-            st.session_state.pop("chat", None)
+mode = st.radio("입력 방식", ["과거 사건으로 시연", "뉴스 붙여넣기", "가상 시나리오", "역스트레스테스트"], horizontal=True)
+if mode == "역스트레스테스트":
+    st.caption("목표 손실을 정하면, 그만큼 잃게 만드는 '가장 그럴듯한(가장 덜 드문)' 요인 충격을 거꾸로 계산합니다.")
+    r1, r2, r3 = st.columns(3)
+    kind = r1.radio("목표", ["3거래일 요인 손실", "20거래일 ES 목표"])
+    val = r2.number_input("목표 (%)", 0.5, 50.0, 5.0 if kind.startswith("3") else 12.0, 0.5) / 100
+    reg = r3.selectbox("국면", ["현재 VIX로 판단", "위기 국면", "평상시 국면"])
+    fac_all = list(ctx.beta_normal.columns)
+    facs = st.multiselect("움직일 수 있는 요인 (비우면 전체)", fac_all, default=fac_all,
+                          format_func=lambda f: ctx.labels.get(f, f))
+    regime_arg = {"위기 국면": "crisis", "평상시 국면": "normal"}.get(reg)
+    if st.button("역산하기", type="primary"):
+        try:
+            with st.spinner("역산 중..."):
+                out = run_reverse(ctx, val if kind.startswith("3") else None, None if kind.startswith("3") else val,
+                                  facs or None, regime_arg, 3, False, llm)
+                st.session_state["reverse"] = out["reverse"]
+        except ValueError as e:
+            st.error(str(e))
+    rv = st.session_state.get("reverse")
+    if rv:
+        from agents.reverse import fmt_prob, fmt_shock
+        st.subheader("가장 그럴듯한 요인 충격")
+        st.dataframe(pd.DataFrame([{"요인": rv["labels"][f], "충격 (3거래일)": fmt_shock(f, rv["shock"][f]),
+                                    "손실 기여": f"{-rv['contribution'][f]:.2%}"} for f in rv["factors"]]),
+                     hide_index=True, width="stretch")
+        h = rv["historical"]
+        st.caption(f"목표 요인 손실 {rv['loss']:.2%}"
+                   + (f" (지금 ES {rv['es_base']:.2%} → 목표 {rv['target_es']:.2%})" if rv.get("target_es") else "")
+                   + f" · 국면 {rv['regime']} · 마할라노비스 거리 {rv['distance']:.2f}σ · 정규분포 가정 확률 {fmt_prob(rv['normal_prob'])}"
+                   + (f" · 과거 실제 빈도 {fmt_prob(h['freq'])} (과거 최악 {h['worst']:.2%}, {h['worst_date']})" if h.get("freq") is not None else ""))
+        if rv.get("nearest_events"):
+            st.caption("가장 닮은 과거 사건: " + ", ".join(f"{e['id']}({e['similarity']})" for e in rv["nearest_events"]))
+        if st.button("이 충격으로 전체 실행 (브리핑·구조 점검·후속 질문)"):
+            with st.spinner("역산 충격으로 계산 중..."):
+                out = run_reverse(ctx, rv["loss"], None, rv["factors"], rv["regime"], rv["horizon_days"], True, llm)
+                st.session_state["res"] = out["run"]
+                st.session_state.pop("whatif", None)
+                st.session_state.pop("chat", None)
+elif mode == "가상 시나리오":
+    from agents.reporter import INST_KO, SECTOR_KO
+    from agents.state import COUNTRIES, INSTRUMENTS, SECTORS
+    how = st.radio("시나리오 고르는 방식", ["목록에서 고르기", "직접 작성"], horizontal=True)
+    sc = None
+    if how == "목록에서 고르기":
+        scs = config.scenarios()
+        pick = st.selectbox("시나리오 (실제 사건 아님)", [s["title"] for s in scs])
+        sc = dict(next(s for s in scs if s["title"] == pick))
+        st.caption(" ".join(str(sc.get("description", "")).split()))
+    else:
+        txt = st.text_area("가정을 문장으로 적어 주세요 (누가·누구에게·어떤 조치를)",
+                           "중국이 대만 해협을 봉쇄하고, 미국과 일본이 중국 주요 은행에 금융제재로 맞선다면?", height=90)
+        if st.button("가정 해석하기"):
+            try:
+                with st.spinner("가정을 사건 구조로 바꾸는 중..."):
+                    st.session_state["custom_sc"] = scenario_from_text(txt, ctx, llm)
+            except ValueError as e:
+                st.error(str(e))
+        base = st.session_state.get("custom_sc")
+        if base:
+            st.caption(f"해석 방식: {base.get('_mode')} · 아래 값을 확인하고 고친 뒤 실행하세요"
+                       + (f" · 근거 부족: {', '.join(base['_uncertain'])}" if base.get("_uncertain") else ""))
+            sc = dict(base)
+            a1, a2 = st.columns(2)
+            sc["title"] = a1.text_input("시나리오 이름", base["title"])
+            sc["instrument"] = a2.selectbox("수단", INSTRUMENTS, index=INSTRUMENTS.index(base["instrument"]),
+                                            format_func=lambda x: INST_KO.get(x, x))
+            b1, b2, b3 = st.columns(3)
+            sc["direction"] = b1.selectbox("방향", ["escalate", "ease"], index=0 if base.get("direction") != "ease" else 1,
+                                           format_func=lambda x: "확대" if x == "escalate" else "완화")
+            sc["initiator"] = b2.selectbox("발동국", COUNTRIES, index=COUNTRIES.index(base["initiator"]))
+            sc["target"] = b3.multiselect("대상국", COUNTRIES, default=[c for c in base.get("target", []) if c in COUNTRIES])
+            sc["sectors"] = st.multiselect("산업", SECTORS, default=[x for x in base.get("sectors", []) if x in SECTORS],
+                                           format_func=lambda x: SECTOR_KO.get(x, x))
+            sc["sovereign_asset_risk"] = st.checkbox("중앙은행·국부펀드 자산이 직접 표적", bool(base.get("sovereign_asset_risk")))
+            if sc["instrument"] != base["instrument"] or sc.get("direction") != base.get("direction"):
+                sc["channels"] = {}                        # 수단·방향을 바꾸면 영향 채널은 기본값으로 다시
+            st.caption(f"영향 채널: {sc.get('channels') or '수단별 기본값'}")
+    if sc is None:
+        st.info("가정을 적고 '가정 해석하기'를 누르면 사건 구조가 채워집니다. 여러 조치가 섞이면 가장 큰 조치 하나로 잡히니, 나머지는 실행 후 What-if로 더하세요.")
+    else:
+        c1, c2 = st.columns(2)
+        reg_ko = c1.selectbox("국면 가정", ["시나리오 기본값", "위기 국면", "평상시 국면", "현재 VIX로 판단"])
+        with c2.expander("강도 6요소 조정"):
+            comps = dict(sc.get("severity_components") or {})
+            for k, lab in [("scope", "범위"), ("immediacy", "즉시성"), ("substitut", "대체 어려움"),
+                           ("escalation", "확전"), ("parties", "당사국 규모"), ("surprise", "의외성")]:
+                comps[k] = st.slider(lab, 1, 5, int(comps.get(k, 3)), key=f"sc_{sc['id']}_{k}_{how}")
+            sc["severity_components"] = comps
+        if reg_ko != "시나리오 기본값":
+            sc["regime"] = {"위기 국면": "crisis", "평상시 국면": "normal", "현재 VIX로 판단": None}[reg_ko]
+        if st.button("시나리오 실행", type="primary"):
+            with st.spinner("가상 시나리오 계산 중..."):
+                st.session_state["res"] = run_scenario(sc, ctx, llm)
+                st.session_state.pop("whatif", None)
+                st.session_state.pop("chat", None)
 elif mode == "과거 사건으로 시연":
     labels = {f"{e['date']} · {e['title']}" + ("" if e.get("clean") else " (clean: false)"): e["id"]
               for e in sorted(ctx.events, key=lambda e: e["date"], reverse=True)}
@@ -174,13 +250,32 @@ def show_result(res: dict, title: str) -> None:
                   f"{d['event_effect_ES'] * 100:+.2f}%p ~ {d['event_effect_ES_severe'] * 100:+.2f}%p", delta_color="inverse")
         c4.metric("3거래일 시나리오 (중앙)", f"{r['scenario_loss']['central']:+.2%}",
                   f"범위 {r['scenario_loss']['mild']:+.2%} ~ {r['scenario_loss']['severe']:+.2%}", delta_color="off")
+        en = r.get("ensemble") or {}
+        if en:
+            e1, e2, e3 = st.columns(3)
+            e1.metric("앙상블 ES97.5 (대표값)", f"{en['ES']:.2%}", f"최악 충격 {en['ES_severe']:.2%}", delta_color="off")
+            e2.metric("모형 위험 (최소 ~ 최대)", f"{en['range'][0]:.2%} ~ {en['range'][1]:.2%}")
+            e3.metric("보수적 기준 (모형 최대)", f"{en['conservative']:.2%}", f"최악 충격 {en['conservative_severe']:.2%}",
+                      delta_color="off")
+            st.caption("모형별 ES: " + " · ".join(f"{k} {v['ES']:.2%}" for k, v in en["models"].items())
+                       + " (동일 가중, 경로 섞기). 아래 ①②③ 분해는 기준 모형(블록 부트스트랩) 결과입니다.")
         ri = r.get("regime_info") or {}
         if ri.get("reason"):
             st.caption(f"국면 판단({'위기' if r['regime'] == 'crisis' else '평상시'}): {ri['reason']}")
     left, right = st.columns([3, 2])
     with left:
-        brief = res.get("final_brief", "").replace("\n### ", "\n##### ").replace("## ", "#### ")
-        st.markdown(brief)
+        from agents.reporter import display_brief
+        raw = res.get("final_brief", "")
+        show_tags = st.toggle("근거 태그 보기", False, key=f"tags_{title}")
+        clean, used = display_brief(raw, res.get("sources"))
+        brief = (raw if show_tags else clean).replace("\n### ", "\n##### ").replace("## ", "#### ")
+        st.markdown(brief.replace("~", "\\~"))
+        if used or res.get("calc_log_id"):
+            with st.expander("근거 출처"):
+                for sid, desc in used:
+                    st.markdown(f"- **{sid}** {desc[:160]}")
+                if res.get("calc_log_id"):
+                    st.markdown(f"- **계산 결과** 계산 기록 `{res['calc_log_id']}` (모든 수치의 출처)")
     with right:
         ev = res.get("event", {})
         with st.expander("사건 카드 (Event Analyst)", expanded=True):

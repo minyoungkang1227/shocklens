@@ -283,6 +283,29 @@ def scenario_event(sc: dict, ctx: Context) -> Event:
     return ev
 
 
+def scenario_from_text(text: str, ctx: Context, llm: LLM | None = None) -> dict:
+    """사용자가 글로 쓴 가정("중국이 대만을 봉쇄하고 미국이 대중 금융제재로 맞서면?")을 시나리오 dict로 바꾼다.
+    Event Analyst(LLM, 없으면 규칙)로 구조화하고, 결과는 화면에서 사람이 고친 뒤 run_scenario로 실행한다."""
+    llm = llm or LLM()
+    out = event_analyst.analyze(text, llm, None, ctx.thresholds.get("severity"))
+    if not out["event_complete"]:
+        raise ValueError("가정을 사건 구조로 바꾸지 못했습니다: " + "; ".join(out["event_errors"])[:200]
+                         + " (누가·누구에게·어떤 조치를 하는지 적어 주세요)")
+    ev = out["event"]
+    from .reporter import COUNTRY_KO, INST_KO
+    title = str(ev.get("title") or "").strip()
+    if out["mode"] != "llm" or not title or len(title) > 30 or title.endswith(("?", "다", "면")):
+        who = COUNTRY_KO.get(ev["initiator"], ev["initiator"])          # 문장 일부를 자르지 않고 구조로 제목을 만든다
+        title = f"{who}의 {INST_KO.get(ev['instrument'], ev['instrument'])}"
+    keys = ("instrument", "direction", "initiator", "target", "sectors", "stage", "severity_components",
+            "channels", "sovereign_asset_risk")
+    sc = {"id": "sc_custom", "title": title if title.startswith("(가정)") else f"(가정) {title}",
+          "description": " ".join(text.split()), **{k: ev[k] for k in keys if k in ev}}
+    sc["_mode"] = out["mode"]
+    sc["_uncertain"] = ev.get("uncertain_fields", [])
+    return sc
+
+
 def run_scenario(scenario: str | dict, ctx: Context, llm: LLM | None = None, overrides: dict | None = None,
                  regime: str | None = None) -> dict:
     """가상 시나리오 실행. scenario = config/scenarios.yaml의 id 또는 같은 형식의 dict (사용자 정의).
@@ -294,7 +317,12 @@ def run_scenario(scenario: str | dict, ctx: Context, llm: LLM | None = None, ove
         if sc is None:
             raise KeyError(f"시나리오 없음: {scenario}")
     else:
-        sc = dict(scenario)
+        sc = {k: v for k, v in scenario.items() if not k.startswith("_")}
+        if sc.get("channels"):
+            sc["channels"] = {f: int(v) for f, v in sc["channels"].items() if int(v) in (-1, 1)}
+        else:
+            from .state import default_channels
+            sc["channels"] = default_channels(sc["instrument"], sc.get("direction", "escalate"))
     ev = scenario_event(sc, ctx)
     text = f"{sc.get('title', '')}. {' '.join(str(sc.get('description', '')).split())}"
     graph = build_graph(ctx, llm)
@@ -306,6 +334,61 @@ def run_scenario(scenario: str | dict, ctx: Context, llm: LLM | None = None, ove
                             "whatif_overrides": overrides or sc.get("overrides"),
                             "seed": ctx.thresholds["risk"]["seed"]}
     return graph.invoke(init, {"recursion_limit": 40})
+
+
+def run_reverse(ctx: Context, loss: float | None = None, target_es: float | None = None,
+                factors: list[str] | None = None, regime: str | None = None, horizon: int = 3,
+                execute: bool = False, llm: LLM | None = None) -> dict:
+    """역스트레스테스트. loss(3거래일 요인 손실, 0.05=5%) 또는 target_es(20거래일 ES 목표)를 준다.
+    execute=True면 역산한 요인 충격을 가상 시나리오로 전체 파이프라인에 넣어 브리핑까지 만든다."""
+    import numpy as np
+
+    from engine import regime as regime_mod
+    from engine import reverse, risk
+    if ctx.frets is None:
+        raise ValueError("요인 일별 데이터(factor_returns.parquet)가 없습니다. python -m pipeline.run_all 을 먼저 실행하세요.")
+    th = ctx.thresholds
+    vix = ctx.levels[ctx.vix_col]
+    if regime not in ("crisis", "normal"):
+        regime = regime_mod.decide({"severity": 3}, vix, th.get("regime", {"mode": "market"}),
+                                   th["severity"]["crisis_regime_min"], None)["regime"]
+    mask = vix >= vix.quantile(th["betas"]["crisis_vix_quantile"])
+    beta = ctx.beta_crisis if regime == "crisis" else ctx.beta_normal
+    es_base = None
+    if target_es is not None:
+        r = th["risk"]
+        rng = np.random.default_rng(r["seed"])
+        R = ctx.rets.to_numpy()
+        days = (np.flatnonzero(mask.reindex(ctx.rets.index).fillna(False).to_numpy())
+                if regime == "crisis" else np.arange(len(R)))
+        paths = risk.block_bootstrap(R, days, r["horizon_days"], r["block_len"], r["n_paths"], rng)
+        w = (ctx.weights.reindex(ctx.rets.columns) / ctx.weights.sum()).to_numpy()
+        es_base = risk.var_es(risk.portfolio_return(paths, w), r["var_level"], r["es_level"])["ES"]
+        loss = target_es - es_base
+        if loss <= 0:
+            raise ValueError(f"지금 ES({es_base:.2%})가 이미 목표({target_es:.2%}) 이상입니다.")
+    if loss is None or loss <= 0:
+        raise ValueError("목표 손실(loss) 또는 목표 ES(target_es)를 양수로 주세요.")
+    out = reverse.run(beta, ctx.weights, ctx.frets, loss, horizon, factors,
+                      mask if regime == "crisis" else None, ctx.f_event, ctx.events)
+    out.update({"regime": regime, "es_base": es_base, "target_es": target_es,
+                "labels": {f: ctx.labels.get(f, f) for f in out["factors"]}})
+    res = None
+    if execute:
+        near = (out.get("nearest_events") or [{}])[0].get("id")
+        base_ev = ctx.event_by_id(near) if near else None
+        shock = {f: v for f, v in out["shock"].items() if abs(v) > 1e-9}
+        sc = {"id": "sc_reverse", "title": f"(역산) {loss:.1%} 손실을 내는 가장 그럴듯한 요인 충격",
+              "description": "역스트레스테스트로 구한 요인 충격을 그대로 넣은 가상 시나리오"
+                             + (f" (가장 닮은 과거 사건: {near})" if near else ""),
+              "instrument": (base_ev or {}).get("instrument", "tariff"),
+              "initiator": (base_ev or {}).get("initiator", "US"), "target": (base_ev or {}).get("target", ["CN"]),
+              "sectors": (base_ev or {}).get("sectors", []),
+              "severity_components": {k: 3 for k in ("scope", "immediacy", "substitut", "escalation", "parties", "surprise")},
+              "channels": {f: (1 if v > 0 else -1) for f, v in shock.items()}}
+        res = run_scenario(sc, ctx, llm, overrides={f: {"abs": v} for f, v in shock.items()}, regime=regime)
+        res["reverse"] = out
+    return {"reverse": out, "run": res}
 
 
 def run_library_event(event_id: str, ctx: Context, llm: LLM | None = None) -> dict:

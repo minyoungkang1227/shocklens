@@ -62,6 +62,12 @@ class Ledger:
             "분해": {"국면 효과": _pp(d["regime_effect_ES"]), "사건 효과": _pp(d["event_effect_ES"]),
                      "사건 효과(최악)": _pp(d["event_effect_ES_severe"]), "전체 변화": _pp(d["total_change_ES"])},
             "정규분포 가정 ES": _p(r["normal_mc_ES"]),
+            **({"앙상블(대표값)": {"ES97.5": _p(r["ensemble"]["ES"]), "최악 충격 ES": _p(r["ensemble"]["ES_severe"]),
+                               "모형 범위": f"{_p(r['ensemble']['range'][0])} ~ {_p(r['ensemble']['range'][1])}",
+                               "보수적 기준(모형 최대)": _p(r["ensemble"]["conservative"]),
+                               "모형별 ES": {k: _p(v["ES"]) for k, v in r["ensemble"]["models"].items()},
+                               "가중치": r["ensemble"]["weights"],
+                               "설명": "분해(①②③)는 기준 모형(블록 부트스트랩) 결과"}} if r.get("ensemble") else {}),
             "정규분포 가정의 과소추정": _pp(r["es_underestimation_normal"]),
             "발표 후 3거래일 시나리오 수익률": {k: _sp(v) for k, v in r["scenario_loss"].items()},
         }
@@ -205,6 +211,12 @@ def rule_answer(q: str, led: Ledger) -> tuple[str, list[dict]]:
         return f"발표 후 3거래일 요인 충격은 {parts}입니다. 산출 방식은 {fs['산출 방식']}입니다.\n[calc:{led.calc_id}]", log
     rs = use("get_risk_summary")
     e = rs["ES97.5"]
+    en = rs.get("앙상블(대표값)")
+    if en:
+        return (f"20거래일 ES97.5 대표값은 모형 3개 앙상블 기준 {en['ES97.5']}(모형 범위 {en['모형 범위']}, "
+                f"보수적 기준 {en['보수적 기준(모형 최대)']})입니다. 기준 모형(블록 부트스트랩) 분해로는 평상시 {e['① 평상시']}, "
+                f"국면 반영 {e['② 시장 국면']}, 사건 반영 {e['③ 국면+사건(중앙)']}이고 사건 효과는 {rs['분해']['사건 효과']}입니다."
+                f"\n[calc:{led.calc_id}]"), log
     return (f"20거래일 ES97.5는 평상시 {e['① 평상시']}, 시장 국면 반영 {e['② 시장 국면']}, 사건 반영 {e['③ 국면+사건(중앙)']}"
             f"(최악 {e['최악 충격']})입니다. 국면 효과 {rs['분해']['국면 효과']}, 사건 효과 {rs['분해']['사건 효과']}입니다."
             f"\n[calc:{led.calc_id}]"), log

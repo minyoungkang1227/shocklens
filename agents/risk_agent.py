@@ -23,6 +23,17 @@ def run(state: dict, ctx: Context) -> dict:
     seed = state.get("seed", r["seed"])
     out = risk.run_stress(ctx.rets, ctx.weights, beta, f_shock, idio, mask, r["horizon_days"], r["block_len"],
                           r["n_paths"], r["var_level"], r["es_level"], seed)
+    base_paths = out.pop("_base_regime_paths", None)
+    ecfg = r.get("ensemble") or {}
+    if ecfg.get("enabled", True) and base_paths is not None:
+        from engine import ensemble
+        from engine.risk import basket_shock
+        vix = ctx.levels[ctx.vix_col]
+        crisis_state = vix >= vix.quantile(ctx.thresholds["betas"]["crisis_vix_quantile"])
+        bsh = basket_shock(beta.reindex(ctx.rets.columns), f_shock, idio)
+        out["ensemble"] = ensemble.run(ctx.rets, ctx.weights, bsh, base_paths, crisis_state, regime, ecfg,
+                                       r["horizon_days"], ecfg.get("n_paths", r["n_paths"]), r["var_level"],
+                                       r["es_level"], seed)
     top = sorted(out["tail_contribution"].items(), key=lambda kv: -kv[1])[:3]
     try:
         from engine.structure import structure
@@ -48,6 +59,7 @@ def run(state: dict, ctx: Context) -> dict:
         "regime": regime,
         "horizon_days": r["horizon_days"],
         "structure": out.get("structure", {}),
+        "ensemble": out.get("ensemble", {}),
     }
     calc_id = calclog.save(
         inputs={"run_id": state.get("run_id"), "event": state["event"],

@@ -198,6 +198,17 @@ ShockLens의 핵심은 '사건 하나 → 단기 꼬리 손실'이고, 아래 �
 
 수단 어휘는 10종으로 늘었다: 기존 7종 + 요충지·공급 차단(chokepoint_disruption), 산업 보조금·현지화(industrial_subsidy), 투자 제한(investment_restriction). 브리핑 점검 목록에 '구조 점검' 3줄이 항상 붙고, 후속 질문 도구에 `get_structure`가 추가됐다.
 
+## 4-4. 손실 분포 앙상블과 역스트레스테스트
+
+**앙상블 Risk Engine (`engine/ensemble.py`).** 모형 3개의 20거래일 경로를 경로 섞기로 합친다.
+- 블록 부트스트랩(기존): 국면 표본에서 5일 블록 재표본
+- FHS·극단값·t-코퓰라: EWMA(λ=0.94) 변동성으로 표준화 → 양쪽 꼬리 5%는 GPD(PWM 추정), 가운데는 경험분포 → 바스켓 결합은 t-코퓰라(자유도 4, 켄달 타우) → 시뮬레이션 중 변동성 매일 갱신. 위기 국면 가정이면 시작 변동성을 위기 날짜 중앙값 이상으로
+- 국면 전환: VIX 기준 2국면 마르코프. 전이확률은 과거 국면 순서에서 세고, 각 날 수익은 그 국면의 과거 날짜에서 뽑는다
+- 보고: 대표값 = 경로를 섞은 앙상블 ES, 모형 위험 = 모형별 ES 최소~최대, 보수적 기준 = 모형별 최대. 가중치는 동일 가중으로 시작(설정 `risk.ensemble.weights`), 백테스트가 쌓이면 성과 기반으로
+- 정규분포 몬테카를로는 앙상블에 넣지 않고 기준선으로만 비교. 평상시·국면·사건 분해는 기준 모형(블록 부트스트랩)으로 계산
+
+**역스트레스테스트 (`engine/reverse.py`, `python -m agents.reverse`).** 목표 손실 L(또는 목표 ES → L = 목표 ES − 지금 ES)을 내는 가장 그럴듯한 요인 충격을 닫힌 해 x* = −L·Σb/(bᵀΣb)로 구한다. b = 바스켓 베타의 비중 가중합, Σ = 3거래일 요인 공분산(위기 국면이면 위기 날짜로). 그럴듯함은 마할라노비스 거리, 정규 가정 확률 1−Φ(d), 과거 3거래일 창의 실제 빈도로 보여주고, 가장 닮은 과거 사건(코사인 유사도)을 붙인다. 움직일 요인을 지경학 채널로 제한할 수 있고, 구한 충격을 그대로 가상 시나리오로 실행해 브리핑·구조 점검·후속 질문까지 받을 수 있다.
+
 ## 5. 구현 위치
 
 `agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py`

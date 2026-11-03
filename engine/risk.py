@@ -128,6 +128,7 @@ def run_stress(rets: pd.DataFrame, weights: pd.Series, beta: pd.DataFrame, facto
         "normal_mc_stressed": m_nrm,
         "es_underestimation_normal": m_stress["ES"] - m_nrm["ES"],
         "tail_contribution": dict(zip(rets.columns, tail_contributions(stressed, w, es_level).round(6))),
+        "_base_regime_paths": base_regime,          # 앙상블용 (장부에는 저장하지 않음)
         "settings": {"horizon": horizon, "block_len": block_len, "n_paths": n_paths,
                      "var_level": var_level, "es_level": es_level, "seed": seed,
                      "n_eligible_days": n_eligible},

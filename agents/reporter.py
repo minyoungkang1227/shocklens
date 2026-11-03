@@ -110,6 +110,15 @@ def build_facts(state: dict, ctx: Context) -> dict[str, str]:
         "TIER": TIER_KO.get(state.get("analog_tier", ""), state.get("analog_tier", "")),
         "CALC_ID": state.get("calc_log_id", ""),
     }
+    en = r.get("ensemble") or {}
+    if en:
+        f["ENS_ES"] = pct(en["ES"])
+        f["ENS_ES_SEVERE"] = pct(en["ES_severe"])
+        f["ENS_LO"], f["ENS_HI"] = pct(en["range"][0]), pct(en["range"][1])
+        f["ENS_MAX"] = pct(en["conservative"])
+        f["ENS_MAX_SEVERE"] = pct(en["conservative_severe"])
+        for m, v in en["models"].items():
+            f[f"ENS_M_{m.upper()}"] = pct(v["ES"])
     st = r.get("structure") or {}
     for k, v in (st.get("bloc_shares") or {}).items():
         f[f"BLOC_{BLOC_KEY.get(k, k)}"] = pct(v)
@@ -130,7 +139,13 @@ PLACEHOLDER_DESC = {
     "HORIZON": "손실 분포의 기간 (20거래일)",
     "ES_NORMAL": "① 평상시 표본의 20거래일 ES97.5",
     "ES_REGIME": "② 현재 국면 표본의 20거래일 ES97.5 (사건 충격 전)",
-    "ES_STRESSED": "③ 국면 + 사건 중앙 충격을 반영한 20거래일 ES97.5",
+    "ES_STRESSED": "③ 국면 + 사건 중앙 충격을 반영한 20거래일 ES97.5 (기준 모형: 블록 부트스트랩, 분해용)",
+    "ENS_ES": "대표값: 모형 3개(블록 부트스트랩·FHS-극단값-t코퓰라·국면 전환) 경로를 섞은 앙상블 20거래일 ES97.5 (사건 중앙 충격)",
+    "ENS_ES_SEVERE": "앙상블 20거래일 ES97.5 (사건 최악 충격)",
+    "ENS_LO": "모형 위험: 모형별 ES 중 최소", "ENS_HI": "모형 위험: 모형별 ES 중 최대",
+    "ENS_MAX": "보수적 기준: 모형별 ES 최대 (보수적 보고용)", "ENS_MAX_SEVERE": "보수적 기준 + 최악 충격",
+    "ENS_M_BOOTSTRAP": "블록 부트스트랩 모형 ES", "ENS_M_FHS_EVT_T": "FHS·극단값·t-코퓰라 모형 ES",
+    "ENS_M_REGIME_SWITCH": "국면 전환 모형 ES",
     "ES_STRESSED_SEVERE": "국면 + 사건 최악(severe) 충격을 반영한 20거래일 ES97.5",
     "ES_STRESSED_MILD": "국면 + 사건 약한(mild) 충격을 반영한 20거래일 ES97.5",
     "VAR_STRESSED": "③의 VaR95", "VAR_STRESSED_SEVERE": "최악 충격 반영 VaR95",
@@ -208,8 +223,12 @@ def template_draft(state: dict, ctx: Context) -> str:
     tg = ", ".join(COUNTRY_KO.get(c, c) for c in ev.get("target", [])) or "복수 국가"
     lines = [
         "## 요약",
-        f"{title} 사건으로 포트폴리오 {{{{HORIZON}}}} ES97.5는 {{{{ES_STRESSED}}}}로 추정되며, "
-        f"평상시 대비 {{{{TOTAL_EFFECT}}}} 변화입니다 [calc].",
+        (f"{title} 사건으로 포트폴리오 {{{{HORIZON}}}} ES97.5는 모형 3개 앙상블 기준 {{{{ENS_ES}}}}"
+         f"(모형 범위 {{{{ENS_LO}}}}~{{{{ENS_HI}}}}, 보수적 기준 {{{{ENS_MAX}}}})로 추정되며, "
+         f"기준 모형상 평상시 대비 {{{{TOTAL_EFFECT}}}} 변화입니다 [calc]."
+         if state["risk_result"].get("ensemble") else
+         f"{title} 사건으로 포트폴리오 {{{{HORIZON}}}} ES97.5는 {{{{ES_STRESSED}}}}로 추정되며, "
+         f"평상시 대비 {{{{TOTAL_EFFECT}}}} 변화입니다 [calc]."),
         "",
         "## 무엇이 일어났나",
         f"{josa(who)} {josa(tg, '을를')} 대상으로 {INST_KO[ev['instrument']]} 조치를 "
@@ -228,6 +247,14 @@ def template_draft(state: dict, ctx: Context) -> str:
     lines += [
         "",
         "## 포트폴리오 영향",
+    ]
+    en = state["risk_result"].get("ensemble") or {}
+    if en:
+        names = {"bootstrap": "블록 부트스트랩", "fhs_evt_t": "FHS·극단값·t-코퓰라", "regime_switch": "국면 전환"}
+        parts = ", ".join(f"{names[m]} {{{{ENS_M_{m.upper()}}}}}" for m in en.get("models", {}))
+        lines += [f"모형별 ES97.5는 {parts}이고, 최악 충격에서는 앙상블 {{{{ENS_ES_SEVERE}}}}(보수적 기준 {{{{ENS_MAX_SEVERE}}}})입니다 [calc].",
+                  "아래 평상시·국면·사건 분해는 기준 모형(블록 부트스트랩) 결과입니다 [calc]."]
+    lines += [
         "ES97.5는 평상시 {{ES_NORMAL}}, {{REGIME}} {{ES_REGIME}}, 사건 충격 반영 후 {{ES_STRESSED}}(최악 시나리오 {{ES_STRESSED_SEVERE}})입니다 [calc].",
         "국면 효과는 {{REGIME_EFFECT}}, 사건 자체 효과는 {{EVENT_EFFECT}}(최악 {{EVENT_EFFECT_SEVERE}})입니다 [calc].",
         "국면 판단 근거: {{REGIME_REASON}} [calc].",
@@ -248,6 +275,24 @@ def append_checklist(text: str, state: dict) -> str:
     block = ["", "### 점검 목록 (자동)"] + ([f"- {x.rstrip('.')} [calc]." for x in w] or ["- 특이사항 없음 [calc]."])
     block.append("- 계산 기록: {{CALC_ID}} [calc].")
     return text.rstrip() + "\n" + "\n".join(block)
+
+
+TAG_ANY = re.compile(r"\s*\[(?:src:[^\]]+|calc)\]")
+
+
+def display_brief(text: str, sources: dict[str, str] | None = None) -> tuple[str, list[tuple[str, str]]]:
+    """화면용: 문장 끝 근거 태그([src:..], [calc])를 지운 깔끔한 본문과, 본문이 인용한 근거 목록을 돌려준다.
+    검증은 태그가 붙은 원문(final_brief)으로 이미 끝났고, 근거는 목록으로 따로 보여준다."""
+    used = []
+    for m in re.finditer(r"\[src:([^\]]+)\]", text):
+        for sid in m.group(1).split(","):
+            sid = sid.strip()
+            if sid and sid not in [u[0] for u in used]:
+                used.append((sid, (sources or {}).get(sid, "")))
+    clean = TAG_ANY.sub("", text)
+    clean = re.sub(r"[ \t]+([.,)])", r"\1", clean)          # 태그를 지우고 남은 '다 .' 같은 공백 정리
+    clean = re.sub(r"\(\s*\)", "", clean)
+    return clean, used
 
 
 def fill(text: str, facts: dict[str, str]) -> str:
@@ -289,6 +334,48 @@ def apply_citations(blocks: list[dict], chunk_ids: list[str]) -> tuple[str, dict
     return "\n".join(out_lines), stats
 
 
+ANY_TAG = re.compile(r"\[(?:src:[^\]]+|calc)\]")
+
+
+def _add_tag(p: str, tag: str) -> str:
+    s = p.rstrip()
+    return (s[:-1] + f" {tag}" + s[-1]) if s.endswith((".", "。")) else s + f" {tag}"
+
+
+def carry_calc_tags(draft: str) -> tuple[str, int]:
+    """LLM이 문단 끝 문장에만 [calc]를 달고 앞 문장을 빼먹는 경우를 코드로 보정한다.
+    - 자리표시자({{KEY}})가 든 문장: 값은 코드가 채우므로 [calc]를 단다.
+    - 숫자 없는 문장: 같은 줄 바로 다음 문장이 [calc]만 달고 있으면 이어지는 설명으로 보고 [calc]를 물려받는다.
+    뉴스 출처 태그([src:..])는 물려주지 않는다(출처를 지어내지 않기 위해)."""
+    added = 0
+    out = []
+    for line in draft.splitlines():
+        st = line.strip()
+        if not st or st.startswith("#"):
+            out.append(line)
+            continue
+        if st.startswith("- "):
+            if "{{" in st and not ANY_TAG.search(st):
+                line, added = _add_tag(line, "[calc]"), added + 1
+            out.append(line)
+            continue
+        pieces = re.split(r"(?<=[.。])\s+(?=\S)", line)
+        nxt_tags: list[str] = []
+        for i in range(len(pieces) - 1, -1, -1):
+            p = pieces[i]
+            tags = ANY_TAG.findall(p)
+            if not tags:
+                if "{{" in p:
+                    p, added = _add_tag(p, "[calc]"), added + 1
+                elif nxt_tags == ["[calc]"] and len(p.strip()) > 15:
+                    p, added = _add_tag(p, "[calc]"), added + 1
+                pieces[i] = p
+                tags = ANY_TAG.findall(p)
+            nxt_tags = tags
+        out.append(" ".join(pieces))
+    return "\n".join(out), added
+
+
 def write(state: dict, ctx: Context, llm: LLM, feedback: list[str] | None = None) -> dict:
     facts = build_facts(state, ctx)
     sources = build_sources(state, ctx)
@@ -325,6 +412,9 @@ def write(state: dict, ctx: Context, llm: LLM, feedback: list[str] | None = None
     mode = "llm" if draft else "template"
     if not draft:
         draft = template_draft(state, ctx)
+    draft, n_auto = carry_calc_tags(draft)
+    if cite_stats is not None:
+        cite_stats["auto_calc_tags"] = n_auto
     draft = append_checklist(draft, state)
     return {"draft_brief": draft, "facts": facts, "sources": sources, "final_brief": fill(draft, facts),
             "reporter_mode": mode + ("+citations" if cite_stats and mode == "llm" else ""),

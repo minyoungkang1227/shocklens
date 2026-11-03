@@ -39,6 +39,12 @@ risk:
   es_level: 0.975
   var_level: 0.95
   seed: 20261112
+  ensemble:              # 손실 분포 모형 3개를 경로 섞기로 합침 (engine/ensemble.py)
+    enabled: true
+    weights: {bootstrap: 1, fhs_evt_t: 1, regime_switch: 1}   # 동일 가중 (백테스트가 쌓이면 성과 기반으로)
+    t_df: 4              # t-코퓰라 자유도
+    evt_tail: 0.05       # 양쪽 꼬리 5%는 GPD
+    ewma_lambda: 0.94    # FHS 변동성 필터
 
 severity:
   # 강도 = 6요소(범위·즉시성·대체가능성·확전단계·당사국규모·예상밖, 각 1~5) 가중 합 -> 0~100 점수 -> 1~5 등급

@@ -108,3 +108,31 @@ def test_long_window_excess_table():
     assert abs(t.loc["semis", (60, "excess")] - 0.12) < 1e-9
     assert t.loc["semis", (60, "pct")] > 90
     assert np.isnan(excess_table(rets, "2030-01-01").loc["semis", (20, "excess")])
+
+
+def test_scenario_from_text_and_run(ctx):
+    from agents.hq import scenario_from_text
+    sc = scenario_from_text("만약 중국이 대만 해협을 봉쇄해 반도체 공급이 끊긴다면?", ctx, NoLLM())
+    assert sc["instrument"] == "chokepoint_disruption" and sc["initiator"] == "CN" and sc["title"].startswith("(가정)")
+    sc["target"] = ["TW", "US"]
+    sc["channels"] = {}                                   # 화면에서 수단을 바꾼 경우: 기본 채널로 채워져야 함
+    r = run_scenario(sc, ctx, NoLLM(), regime="crisis")
+    assert r["status"] == "ok" and r["verification"]["passed"] and r["event"]["channels"]
+    import pytest
+    with pytest.raises(ValueError):
+        scenario_from_text("내일 날씨가 좋으면 좋겠다", ctx, NoLLM())
+
+
+def test_carry_calc_tags_fixes_paragraph_with_tag_only_at_end():
+    from agents.reporter import carry_calc_tags
+    from agents.verifier import _sentences, TAG
+    draft = ("기준 모형 분해에서 ① {{ES_NORMAL}}, ② {{ES_BASE}}이고, 사건 효과는 {{EVENT_EFFECT}}입니다. "
+             "사건 효과가 양수이므로 위험이 커진 방향입니다 [calc].\n"
+             "근거 경로는 완화된 유사 사례입니다. relaxed는 강도가 다른 사건을 낮은 가중치로 쓴 경우입니다 [calc].\n"
+             "중국이 수출통제를 확대했습니다. 미국이 추가 관세를 위협했습니다 [src:s1].")
+    out, n = carry_calc_tags(draft)
+    lines = out.splitlines()
+    assert all(TAG.search(s) for s in _sentences("\n".join(lines[:2])))
+    assert n == 2
+    # 뉴스 출처 태그는 물려주지 않는다
+    assert lines[2].startswith("중국이 수출통제를 확대했습니다. ")

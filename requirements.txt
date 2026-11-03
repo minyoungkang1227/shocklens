@@ -3,6 +3,7 @@ pandas>=2.1
 numpy>=1.26
 pyarrow>=14
 pyyaml>=6
+scipy>=1.11          # 앙상블(t-코퓰라)·역스트레스테스트
 requests>=2.31
 yfinance>=0.2.40
 

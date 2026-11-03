@@ -118,6 +118,8 @@ python -m agents.run --text "..." --force                        # 중요도 1�
 python -m agents.run --list-scenarios                            # 가상 시나리오 목록
 python -m agents.run --scenario sc_taiwan_blockade --trace       # 가상 시나리오 (대만 해협 봉쇄 가정)
 python -m agents.law_effect --event us_chips_2022                # 법령 장기 효과 (20/60/120거래일 업종 초과수익)
+python -m agents.reverse --loss 0.05                             # 역스트레스테스트: 5% 손실을 내는 가장 그럴듯한 요인 충격
+python -m agents.reverse --es 0.12 --factors tech_war,cny,risk_off --run   # ES 12% 목표, 지경학 채널만, 전체 실행
 python -m agents.run --event cn_ree_oct_2025 --whatif "반도체 충격 3배"
 python -m agents.run --event cn_ree_oct_2025 --ask "왜 반도체 손실이 제일 커?"   # 후속 질문 (계산 장부 조회)
 python -m agents.run --event cn_ree_oct_2025 --chat             # 후속 질문 대화 모드
