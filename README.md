@@ -132,13 +132,13 @@ python -m agents.run --event cn_ree_oct_2025 --chat             # 후속 질문 
 
 `.env`에 `LLM_API_KEY`가 있으면 Event Analyst(뉴스 해석)와 Reporter(브리핑 문장)가 LLM으로 동작하고, 없으면 키워드 규칙·고정 템플릿으로 동작합니다. 숫자는 어느 경우든 코드가 계산하고, Verifier가 브리핑의 모든 숫자·근거 태그를 계산 장부와 대조해 통과하지 못하면 담당 에이전트로 되돌립니다(최대 2회, 이후 "판단 보류"). 에이전트별 설계는 [docs/agents.md](docs/agents.md)에 있습니다.
 
-### 6) 웹 배포용 데이터 사본
+### 6) 데이터 사본 (선택)
 
 ```bash
 python -m pipeline.snapshot        # data/processed, data/model -> data/snapshot (약 1MB)
 ```
 
-`data/snapshot` 폴더를 GitHub에 같이 올리면, 웹 앱이 시장 데이터를 내려받지 않고 사본으로 바로 뜹니다. 데이터를 새로 받은 뒤에는 사본도 다시 만듭니다.
+Yahoo Finance 시세는 개인·연구 용도로만 쓰는 조건이라 수익률 사본(`data/snapshot`)은 저장소에 올리지 않습니다. 웹 앱은 사본이 없으면 처음 실행할 때 `pipeline.run_all`로 데이터를 직접 받습니다(2~3분). 본인 환경에서 빠르게 띄우려면 위 명령으로 사본을 만든 뒤 로컬에서만 쓰세요.
 
 ### 7) 데모 화면
 
