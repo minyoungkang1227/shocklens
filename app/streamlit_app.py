@@ -248,8 +248,10 @@ def show_result(res: dict, title: str) -> None:
                   delta_color="inverse")
         c3.metric("③ 사건 충격 반영 (중앙 ~ 최악)", f"{r['stressed']['ES']:.2%} ~ {r['stressed_severe']['ES']:.2%}",
                   f"{d['event_effect_ES'] * 100:+.2f}%p ~ {d['event_effect_ES_severe'] * 100:+.2f}%p", delta_color="inverse")
-        c4.metric("3거래일 시나리오 (중앙)", f"{r['scenario_loss']['central']:+.2%}",
-                  f"범위 {r['scenario_loss']['mild']:+.2%} ~ {r['scenario_loss']['severe']:+.2%}", delta_color="off")
+        band = r.get("scenario_band") or {}
+        rng_txt = (f"예측구간 {band['interval']['lo']:+.2%} ~ {band['interval']['hi']:+.2%}" if band.get("interval")
+                   else f"범위 {r['scenario_loss']['mild']:+.2%} ~ {r['scenario_loss']['severe']:+.2%}")
+        c4.metric("3거래일 시나리오 (중앙)", f"{r['scenario_loss']['central']:+.2%}", rng_txt, delta_color="off")
         en = r.get("ensemble") or {}
         if en:
             e1, e2, e3 = st.columns(3)

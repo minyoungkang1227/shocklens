@@ -43,8 +43,18 @@ def run(state: dict, ctx: Context) -> dict:
                                      state["event"], jcfg)
     except FileNotFoundError:
         out["structure"] = {}
+    nb = r.get("noise_band") or {}
+    band = None
+    if nb.get("enabled", True):
+        ex = [(str(e.get("react_from") or e["date"]), str(e["date"])) for e in ctx.events if e.get("date")]
+        band = risk.noise_band(ctx.rets, ctx.weights, ctx.thresholds["event_window"]["react_days"],
+                               float(nb.get("q", 0.75)), ex)
+        sl = out["scenario_loss"]
+        lo, hi = min(sl["mild"], sl["severe"]), max(sl["mild"], sl["severe"])
+        band["interval"] = {"lo": lo - band["half_width"], "hi": hi + band["half_width"]}
     result = {
         "scenario_loss": out["scenario_loss"],
+        "scenario_band": band,
         "scenario_loss_factor_only": out["scenario_loss_factor_only"],
         "baseline_normal": out["baseline_normal"],
         "baseline": out["baseline"],

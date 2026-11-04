@@ -182,7 +182,8 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
     def n_verifier(state: ShockLensState) -> dict:
         t0 = time.time()
         v = verifier.check(state["final_brief"], state["facts"], state["sources"], state["risk_result"],
-                           state["event"], verifier_llm, verify_with_llm, llm_mode)
+                           state["event"], verifier_llm, verify_with_llm, llm_mode,
+                           require_structure=state.get("reporter_mode", "").startswith("llm"))
         extra = f" (사실 검사 {v['checker_model']}, 경고 {len(v.get('warnings', []))})" if v.get("checker_model") else ""
         return {"verification": v,
                 "trace": _t("verifier", ("통과" if v["passed"] else f"반려 {len(v['issues'])}건 -> {v['route']}") + extra, t0)}

@@ -15,6 +15,8 @@ analog:
     medium: [3]
     large: [4, 5]
   min_same_class: 2      # 같은 등급 후보가 이보다 적으면 인접 등급을 보충
+  partial_unclean_weight: 0.5   # 겹친 사건(same_dispute·macro)을 이 계수로 포함. 0이면 예전처럼 clean만
+  pool_tier: true        # relaxed 후보가 없으면 같은 수단 계열 전체(pool)를 쓴 뒤에야 synthetic
   adjacent_class_weight: 0.5   # 보충한 인접 등급 사건의 가중치 배율
   min_weighted: 3        # 유사 사건이 이 이상이면 가중 분포(25/50/90%), 미만이면 사건 단위 선택
   scenario_quantiles: [0.25, 0.5, 0.9]
@@ -29,11 +31,12 @@ event_window:
   react_days: 3      # 충격 크기 산정에 쓰는 발표 직후 반응 창 (기본값)
 
 betas:
-  ridge_alpha: 1.0       # 릿지 회귀 강도 (표준화된 팩터 기준)
+  ridge_alpha: cv        # 시간 블록 교차검증으로 선택 (2026-11-04: 1.0은 계수를 절반 가까이 줄여 CV 오차 26% 큼 -> 0.01 선택됨)
   crisis_vix_quantile: 0.8   # VIX 수준이 상위 20%인 날 = 위기 구간
 
 risk:
   horizon_days: 20
+  noise_band: {enabled: true, q: 0.75}   # 3거래일 시나리오 구간에 평소 시장 변동 띠(|3일 수익률| q분위)를 더해 예측구간으로 보고
   n_paths: 10000
   block_len: 5
   es_level: 0.975
@@ -49,8 +52,13 @@ risk:
 severity:
   # 강도 = 6요소(범위·즉시성·대체가능성·확전단계·당사국규모·예상밖, 각 1~5) 가중 합 -> 0~100 점수 -> 1~5 등급
   component_weights: {scope: 0.20, immediacy: 0.15, substitut: 0.15, escalation: 0.15, parties: 0.15, surprise: 0.20}
-  self_consistency: {n: 3, spread_warn: 2}   # LLM이 강도를 n번 채점해 요소별 중앙값 사용, 흩어짐>=spread_warn 이면 불확실 표시
+  self_consistency:
+    n: 3                 # 기본 채점 횟수 (요소별 중앙값 사용)
+    small_share: 1       # 그중 작은 모델(Haiku)로 채점하는 횟수 — 같은 모델이 같은 실수를 반복하지 않게 (모델 다양성)
+    spread_warn: 2       # 요소 퍼짐(최대-최소)이 이 이상이면 강도 불확실 표시
+    extra_n: 2           # 퍼짐이 spread_warn 이상일 때만 추가 채점 횟수 (적응형: 애매한 사건에만 비용)
   use_components: true         # false면 events.yaml의 severity 숫자를 그대로 사용
+  labels: human                # human = events.yaml 사람 라벨 / blind = agents.relabel_severity 의 블라인드 LLM 채점
   crisis_regime_min: 4   # (regime.mode=severity 일 때) 강도 4 이상이면 위기 베타 사용
   # 강도 -> 팩터 20일 변동 분위수 (임시, 사건 라이브러리로 역산해 확정)
   quantile_map: {1: 0.50, 2: 0.80, 3: 0.95, 4: 0.99, 5: 0.995}
@@ -61,6 +69,7 @@ regime:
   lookback_days: 5            # 최근 n거래일 VIX 평균으로 판단 (하루 튀는 값 방지)
 
 reporter:
+  max_tokens: 8000       # 인용 응답은 인용 원문도 출력 토큰에 포함돼 4000이면 잘릴 수 있음
   citations: true        # 뉴스 문장을 인용 기능(custom content 문서)으로 넘겨 [src:] 태그를 API 인용으로 보강
 
 llm:

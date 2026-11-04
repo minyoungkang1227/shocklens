@@ -17,7 +17,7 @@ from . import prompts
 from .context import Context
 from .llm import LLM
 
-TIER_KO = {"direct": "직접 유사 사례", "relaxed": "완화된 유사 사례", "synthetic": "강도 기반 합성", "user": "사용자 가정"}
+TIER_KO = {"direct": "직접 유사 사례", "relaxed": "완화된 유사 사례", "pool": "같은 수단 계열 사건 풀", "synthetic": "강도 기반 합성", "user": "사용자 가정"}
 INST_KO = {"tariff": "관세", "tariff_pause": "관세 유예·인하", "tech_export_control": "기술 수출통제",
            "entity_list": "거래제한 명단", "resource_export_control": "자원 수출통제",
            "currency": "환율", "financial_sanction": "금융제재", "chokepoint_disruption": "요충지·공급 차단",
@@ -105,6 +105,9 @@ def build_facts(state: dict, ctx: Context) -> dict[str, str]:
         "LOSS_MILD": spct(r["scenario_loss"]["mild"]),
         "LOSS_CENTRAL": spct(r["scenario_loss"]["central"]),
         "LOSS_SEVERE": spct(r["scenario_loss"]["severe"]),
+        **({"LOSS_BAND_LO": spct(r["scenario_band"]["interval"]["lo"]),
+            "LOSS_BAND_HI": spct(r["scenario_band"]["interval"]["hi"]),
+            "LOSS_BAND_HALF": pct(r["scenario_band"]["half_width"])} if r.get("scenario_band") else {}),
         "REGIME": "위기 국면" if r["regime"] == "crisis" else "평상시 국면",
         "REGIME_REASON": (r.get("regime_info") or {}).get("reason", ""),
         "TIER": TIER_KO.get(state.get("analog_tier", ""), state.get("analog_tier", "")),
@@ -156,6 +159,8 @@ PLACEHOLDER_DESC = {
     "LOSS_MILD": "발표 후 '3거래일' 시나리오 포트폴리오 수익률 (mild). 20거래일 손실이 아님",
     "LOSS_CENTRAL": "발표 후 '3거래일' 시나리오 포트폴리오 수익률 (central). 20거래일 손실이 아님",
     "LOSS_SEVERE": "발표 후 '3거래일' 시나리오 포트폴리오 수익률 (severe). 20거래일 손실이 아님",
+    "LOSS_BAND_LO": "3거래일 예측구간 하단 = 시나리오 범위에 평소 시장 변동 띠를 더한 값", "LOSS_BAND_HI": "3거래일 예측구간 상단",
+    "LOSS_BAND_HALF": "평소 시장 변동 띠 반폭 (사건 무관일 |3일 수익률| 75% 분위)",
     "REGIME": "현재 국면 이름", "REGIME_REASON": "국면 판단 근거 문장",
     "TIER": "충격 근거 경로", "CALC_ID": "계산 기록 번호",
     "TOP1": "꼬리 손실 기여 1위 바스켓", "TOP1_SHARE": "그 기여 비중",
@@ -259,6 +264,8 @@ def template_draft(state: dict, ctx: Context) -> str:
         "국면 효과는 {{REGIME_EFFECT}}, 사건 자체 효과는 {{EVENT_EFFECT}}(최악 {{EVENT_EFFECT_SEVERE}})입니다 [calc].",
         "국면 판단 근거: {{REGIME_REASON}} [calc].",
         "발표 직후 3거래일 기준 시나리오 수익률은 약 {{LOSS_MILD}} ~ {{LOSS_SEVERE}}(중앙 {{LOSS_CENTRAL}})입니다 [calc].",
+        *(["평소 시장 변동을 더한 3거래일 예측구간은 {{LOSS_BAND_LO}} ~ {{LOSS_BAND_HI}}입니다 [calc]."]
+          if state["risk_result"].get("scenario_band") else []),
         "꼬리 구간 손실 기여는 {{TOP1}} {{TOP1_SHARE}}, {{TOP2}} {{TOP2_SHARE}}, {{TOP3}} {{TOP3_SHARE}} 순입니다 [calc].",
         ("정규분포를 가정하면 ES를 {{NORMAL_MC_ES}}로 계산해 {{ES_UNDER}} 과소평가합니다 [calc]."
          if state["risk_result"]["es_underestimation_normal"] > 0 else
@@ -397,14 +404,23 @@ def write(state: dict, ctx: Context, llm: LLM, feedback: list[str] | None = None
         use_cite = (ctx.thresholds.get("reporter") or {}).get("citations", False) and llm.provider == "anthropic"
         bad = {f["id"] for f in state.get("injection_flags") or []}
         news = [x for x in state.get("sentences", []) if x["id"] not in bad]
+        rcfg = ctx.thresholds.get("reporter") or {}
+        max_tok = int(rcfg.get("max_tokens", 8000))
         try:
             if use_cite and news:
                 blocks = llm.complete_cited(prompts.REPORTER_SYSTEM + prompts.CITATION_NOTE, user,
-                                            [x["text"] for x in news], max_tokens=4000)
+                                            [x["text"] for x in news], max_tokens=max_tok)
                 if blocks:
                     draft, cite_stats = apply_citations(blocks, [x["id"] for x in news])
+                meta = getattr(llm, "last_meta", {}) or {}
+                # 인용 응답은 인용 원문(cited_text)도 출력 토큰에 들어가 길이 제한에 먼저 걸릴 수 있다.
+                # 잘렸거나 본문이 너무 짧으면 인용 없이 한 번 더 쓴다 (출처 태그는 모델이 직접 단다).
+                if meta.get("stop_reason") == "max_tokens" or not draft or len(draft) < 400:
+                    cite_stats = {**(cite_stats or {}), "fallback": f"citations 응답 {meta.get('stop_reason')} "
+                                                                     f"{len(draft or '')}자 -> 일반 텍스트로 재작성"}
+                    draft = llm.complete_text(prompts.REPORTER_SYSTEM, user, max_tokens=max_tok)
             else:
-                draft = llm.complete_text(prompts.REPORTER_SYSTEM, user, max_tokens=4000)
+                draft = llm.complete_text(prompts.REPORTER_SYSTEM, user, max_tokens=max_tok)
             if not draft:
                 err = f"LLM 응답에 본문이 없음 {getattr(llm, 'last_meta', {})}"
         except Exception as e:

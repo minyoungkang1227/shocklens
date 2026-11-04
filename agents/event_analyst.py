@@ -315,21 +315,46 @@ def consensus(samples: list[dict]) -> tuple[dict, dict]:
     return med, spread
 
 
-def resample_severity(draft: dict, news_block: str, llm: LLM, n: int) -> list[dict]:
-    """같은 뉴스로 강도만 n-1번 더 채점한다. 실패한 표본은 버린다."""
-    head = {k: draft.get(k) for k in ("title", "instrument", "direction", "initiator", "target", "sectors", "stage")}
+def _score_once(head: dict, news_block: str, llm: LLM) -> dict | None:
     user = f"사건 구조: {head}\n\n{news_block}"
+    try:
+        r = llm.complete_json(prompts.SEVERITY_SYSTEM, user, max_tokens=600,
+                              schema=prompts.SEVERITY_SCHEMA, name="emit")
+        c = (r or {}).get("severity_components") or {}
+        return c if all(k in c for k in sev.COMPONENTS) else None
+    except Exception:
+        return None
+
+
+def resample_severity(draft: dict, news_block: str, llm: LLM, n: int, small_share: int = 0) -> list[dict]:
+    """같은 뉴스로 강도만 n-1번 더 채점한다. small_share 번은 작은 모델(Haiku)로 채점해 같은 모델이 같은 실수를
+    반복하는 것을 막는다(모델 다양성). 실패한 표본은 버린다. 각 표본에 '_model' 키로 출처를 남긴다."""
+    head = {k: draft.get(k) for k in ("title", "instrument", "direction", "initiator", "target", "sectors", "stage")}
     out = []
-    for _ in range(max(n - 1, 0)):
-        try:
-            r = llm.complete_json(prompts.SEVERITY_SYSTEM, user, max_tokens=600,
-                                  schema=prompts.SEVERITY_SCHEMA, name="emit")
-            c = (r or {}).get("severity_components") or {}
-            if all(k in c for k in sev.COMPONENTS):
-                out.append(c)
-        except Exception:
-            continue
+    extra = max(n - 1, 0)
+    small = llm.derive(small=True) if small_share > 0 else None
+    for i in range(extra):
+        use_small = small is not None and i < min(small_share, extra) and small.model != llm.model
+        c = _score_once(head, news_block, small if use_small else llm)
+        if c:
+            out.append({**c, "_model": (small.model if use_small else llm.model)})
     return out
+
+
+def sample_severity(draft: dict, news_block: str, llm: LLM, sc: dict) -> list[dict]:
+    """자기일관성 + 적응형: 기본 n회(그중 small_share회는 Haiku). 요소 퍼짐이 spread_warn 이상이면 extra_n회 더 채점.
+    확실한 사건엔 비용을 안 쓰고 애매한 사건에만 더 쓴다."""
+    first = dict(draft.get("severity_components") or {})
+    first["_model"] = llm.model
+    n = int(sc.get("n", 1))
+    samples = [first] + resample_severity(draft, news_block, llm, n, int(sc.get("small_share", 0)))
+    extra_n = int(sc.get("extra_n", 0))
+    if extra_n > 0 and len(samples) > 1:
+        _, spread = consensus(samples)
+        if max(spread.values(), default=0) >= int(sc.get("spread_warn", 2)):
+            # 추가 채점은 큰 모델·작은 모델을 번갈아 (다양성)
+            samples += resample_severity(draft, news_block, llm, extra_n + 1, small_share=extra_n // 2 or 1)
+    return samples
 
 
 # ------------------------------------------------------------- 진입점
@@ -363,7 +388,7 @@ def analyze(raw_text: str, llm: LLM, feedback: list[str] | None = None, severity
                     flagged.add(sid)
             first = draft.get("severity_components") or {}
             if n_samples > 1 and all(k in first for k in sev.COMPONENTS):
-                samples = [first] + resample_severity(draft, news_block, llm, n_samples)
+                samples = sample_severity(draft, news_block, llm, sc)
                 if len(samples) > 1:
                     med, spread = consensus(samples)
                     draft = {**draft, "severity_components": med}
@@ -385,12 +410,15 @@ def analyze(raw_text: str, llm: LLM, feedback: list[str] | None = None, severity
             event.severity_samples = len(samples)
             event.severity_spread = spread
             wide = {k: v for k, v in spread.items() if v >= int(sc.get("spread_warn", 2))}
+            models = sorted({str(x.get("_model", "")) for x in samples if x.get("_model")})
+            who = f", 모델 {len(models)}종" if len(models) > 1 else ""
+            adaptive = " (흩어져서 추가 채점)" if len(samples) > int(sc.get("n", 1)) else ""
             if wide:
                 if "severity" not in event.uncertain_fields:
                     event.uncertain_fields = sorted(set(event.uncertain_fields) | {"severity"})
-                event.notes.append(f"강도 {len(samples)}회 채점이 흩어짐 {wide} -> 중앙값 사용, 강도 불확실")
+                event.notes.append(f"강도 {len(samples)}회 채점{who}{adaptive}이 흩어짐 {wide} -> 중앙값 사용, 강도 불확실")
             else:
-                event.notes.append(f"강도 {len(samples)}회 채점 일치 (최대 흩어짐 {max(spread.values(), default=0)})")
+                event.notes.append(f"강도 {len(samples)}회 채점{who}{adaptive} 일치 (최대 흩어짐 {max(spread.values(), default=0)})")
         if flags:
             event.notes.append(f"뉴스 안 지시문 의심 문장 {sorted(flagged)} -> 근거·출처에서 제외")
         if llm_error:

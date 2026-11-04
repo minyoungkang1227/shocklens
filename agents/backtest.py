@@ -35,8 +35,10 @@ from .context import Context, load_context
 from .exposure_analyst import analyze as exposure_of
 
 VARIANTS = {
-    "v1_구조만": {"text_weight": 0.0, "size_classes": None, "severe_floor": False, "top_k": 3, "min_weighted": 99},
-    "v2_현재": {},
+    "v1_구조만": {"text_weight": 0.0, "size_classes": None, "severe_floor": False, "top_k": 3, "min_weighted": 99,
+               "partial_unclean_weight": 0.0, "pool_tier": False},
+    "v2_11.03": {"partial_unclean_weight": 0.0, "pool_tier": False},
+    "v3_현재": {},        # + 겹친 사건 부분 사용(0.5) + 수단 풀 층
 }
 
 
@@ -50,7 +52,29 @@ def variant_ctx(ctx: Context, overrides: dict) -> Context:
     return replace(ctx, thresholds=th)
 
 
-def predict(ev: dict, ctx: Context, use_text: bool, llm=None) -> dict:
+def asof_context(ctx: Context, date: str, min_days: int = 750) -> Context:
+    """사건 날짜 '이전' 데이터만으로 베타·위기 베타·분위수 표를 다시 추정한 Context.
+    (look-ahead 차단: 전체 기간으로 만든 모델 산출물을 과거 사건 테스트에 쓰지 않는다)
+    이력이 min_days보다 짧으면 그대로 돌려주고 호출자가 건너뛴다."""
+    from pipeline import betas as betas_mod, quantiles as q_mod
+    cut = pd.Timestamp(date) - pd.Timedelta(days=1)
+    rets = ctx.rets.loc[:cut]
+    frets = ctx.frets.loc[:cut] if ctx.frets is not None else None
+    if frets is None or len(rets) < min_days:
+        return ctx
+    frets = frets.reindex(rets.index).dropna()
+    rets = rets.reindex(frets.index)
+    th = ctx.thresholds
+    b_norm, b_cris, _, _, _ = betas_mod.build(rets, frets, ctx.levels[ctx.vix_col].loc[:cut],
+                                              th["betas"]["ridge_alpha"], th["betas"]["crisis_vix_quantile"])
+    up, down = q_mod.quantile_tables(frets, th["event_window"]["react_days"])
+    up.columns, down.columns = [str(c) for c in up.columns], [str(c) for c in down.columns]
+    return replace(ctx, beta_normal=b_norm, beta_crisis=b_cris, q_up=up, q_down=down)
+
+
+def predict(ev: dict, ctx: Context, use_text: bool, llm=None, asof: bool = True) -> dict:
+    if asof and ev.get("date"):
+        ctx = asof_context(ctx, ev["date"])
     a = analog_finder.find(ev, ctx, event_text(ev) if use_text else None, llm=llm)
     ids = [x["id"] for x in a["analogs"]]
     w = {x["id"]: x["weight"] for x in a["analogs"]}
@@ -61,7 +85,13 @@ def predict(ev: dict, ctx: Context, use_text: bool, llm=None) -> dict:
     idio = shock_mapper.to_frame(s["idio_shock"])
     loss = risk.scenario_losses(risk.basket_shock(beta.reindex(ctx.rets.columns), fs, idio),
                                 ctx.weights / ctx.weights.sum())
-    return {"analogs": ids, "tier": a["analog_tier"], "method": s["shock_method"], **loss.to_dict()}
+    nb = (ctx.thresholds.get("risk") or {}).get("noise_band") or {}
+    half = 0.0
+    if nb.get("enabled", True):
+        ex = [(str(e.get("react_from") or e["date"]), str(e["date"])) for e in ctx.events if e.get("date")]
+        half = risk.noise_band(ctx.rets, ctx.weights, ctx.thresholds["event_window"]["react_days"],
+                               float(nb.get("q", 0.75)), ex, asof=ev.get("date") if asof else None)["half_width"]
+    return {"analogs": ids, "tier": a["analog_tier"], "method": s["shock_method"], "band_half": half, **loss.to_dict()}
 
 
 def actual_return(eid: str, ctx: Context) -> float | None:
@@ -71,7 +101,8 @@ def actual_return(eid: str, ctx: Context) -> float | None:
     return float(risk.portfolio_return(ctx.b_event.loc[[eid]].to_numpy(), w)[0])
 
 
-def run(ctx: Context, include_unclean: bool = False) -> pd.DataFrame:
+def run(ctx: Context, include_unclean: bool = False, asof: bool = True) -> pd.DataFrame:
+    """asof=True: 사건 이전 데이터만으로 베타·분위수를 재추정(기본). False: 전체 기간 산출물 사용(옛 방식, 비교용)."""
     rows = []
     for vname, ov in VARIANTS.items():
         vctx = variant_ctx(ctx, ov)
@@ -82,7 +113,7 @@ def run(ctx: Context, include_unclean: bool = False) -> pd.DataFrame:
             act = actual_return(ev["id"], ctx)
             if act is None:
                 continue
-            p = predict(ev, vctx, use_text)
+            p = predict(ev, vctx, use_text, asof=asof)
             lo, hi = min(p["mild"], p["severe"]), max(p["mild"], p["severe"])
             ease = ev.get("direction", "escalate") == "ease"
             rows.append({
@@ -92,6 +123,9 @@ def run(ctx: Context, include_unclean: bool = False) -> pd.DataFrame:
                 "actual": act,
                 "dir_hit": bool(np.sign(p["central"]) == np.sign(act)),
                 "in_range": bool(lo <= act <= hi),
+                "band_half": p["band_half"],
+                "in_band": bool(lo - p["band_half"] <= act <= hi + p["band_half"]),
+                "band_width": (hi - lo) + 2 * p["band_half"],
                 "severe_cover": bool(act <= p["severe"]) if ease else bool(act >= p["severe"]),
                 "abs_err": abs(p["central"] - act),
             })
@@ -104,6 +138,8 @@ def summary(df: pd.DataFrame) -> pd.DataFrame:
         "사건 수": g.size(),
         "방향 적중": g["dir_hit"].mean(),
         "범위 적중": g["in_range"].mean(),
+        "예측구간 커버": g["in_band"].mean(),
+        "구간 폭": g["band_width"].mean(),
         "severe 커버": g["severe_cover"].mean(),
         "평균 절대오차": g["abs_err"].mean(),
     })
@@ -116,9 +152,11 @@ def main() -> None:
         pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="clean: false 사건도 포함")
+    ap.add_argument("--no-asof", action="store_true", help="전체 기간 베타·분위수 사용 (look-ahead 허용, 비교용)")
     a = ap.parse_args()
     ctx = load_context()
-    df = run(ctx, a.all)
+    print("베타·분위수: " + ("전체 기간 (look-ahead 허용)" if a.no_asof else "사건 이전 데이터만으로 재추정 (as-of)"))
+    df = run(ctx, a.all, asof=not a.no_asof)
     if df.empty:
         print("비교할 사건이 없습니다 (실제 수익률이 있는 사건 필요)")
         return
@@ -126,13 +164,16 @@ def main() -> None:
     for vname in VARIANTS:
         sub = df[df.variant == vname]
         print(f"\n=== {vname} ===")
-        show = sub[["event", "tier", "method", "mild", "central", "severe", "actual", "in_range", "severe_cover"]].copy()
+        show = sub[["event", "tier", "method", "mild", "central", "severe", "band_half", "actual",
+                    "in_range", "in_band", "severe_cover"]].copy()
         for c in ("mild", "central", "severe", "actual"):
             show[c] = show[c].map(pct)
+        show["band_half"] = show["band_half"].map(lambda x: f"±{x:.2%}")
         print(show.to_string(index=False))
     s = summary(df)
     print("\n=== 요약 ===")
     print(s.to_string(formatters={"방향 적중": "{:.0%}".format, "범위 적중": "{:.0%}".format,
+                                  "예측구간 커버": "{:.0%}".format, "구간 폭": "{:.2%}".format,
                                   "severe 커버": "{:.0%}".format, "평균 절대오차": "{:.2%}".format}))
     out = config.MODEL_DIR / "backtest.csv"
     df.to_csv(out, index=False, encoding="utf-8-sig")

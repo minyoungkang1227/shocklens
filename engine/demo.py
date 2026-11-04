@@ -54,8 +54,10 @@ def main(event_id: str, window: str = "react", use_all: bool = False, past_only:
     acfg = th["analog"]
     analogs, tier, ranked = analog.select(ev, ev_list, list(F.index), acfg,
                                           clean_only=not use_all, past_only=past_only)
+    pw = float(acfg.get("partial_unclean_weight", 0.0))
     excluded = [e["id"] for e in ev_list if e["id"] != event_id and e["id"] in F.index
-                and analog.direction(e) == analog.direction(ev) and e.get("clean") is not True and not use_all]
+                and analog.direction(e) == analog.direction(ev) and not use_all
+                and analog.clean_factor(e, True, pw) is None]
 
     regime = "crisis" if ev["severity"] >= th["severity"]["crisis_regime_min"] else "normal"
     beta = md["beta_crisis"] if regime == "crisis" else md["beta_normal"]
@@ -76,6 +78,7 @@ def main(event_id: str, window: str = "react", use_all: bool = False, past_only:
     r = th["risk"]
     out = risk.run_stress(md["rets"], weights, beta, f_shock, idio, mask, r["horizon_days"], r["block_len"],
                           r["n_paths"], r["var_level"], r["es_level"], r["seed"])
+    out.pop("_base_regime_paths", None)        # 앙상블용 경로 배열은 장부에 저장하지 않는다
     calc_id = calclog.save(
         inputs={"event_id": event_id, "analogs": analogs, "excluded_unclean": excluded, "tier": tier, "regime": regime,
                 "factor_shock": f_shock.to_dict(), "exposure": exposure, "channels": ev["channels"],

@@ -117,6 +117,7 @@ def find(event: dict, ctx: Context, text: str | None = None, use_unclean: bool =
         if r["id"] in ids:
             picks.append({"id": r["id"], "score": round(r["score"], 3), "weight": round(r.get("weight", r["score"]), 3),
                           "closeness": r.get("closeness"), "severity_points": round(pts_map.get(r["id"]) or 0, 1),
+                          "clean_factor": r.get("clean_factor", 1.0),
                           "struct": round(r["struct"], 3), "text": None if r["text"] is None else round(r["text"], 3),
                           "size_class": r["size_class"], "parts": r["parts"],
                           "reason": _reason(r, ctx.event_by_id(r["id"]) or {}, why.get(r["id"], []))})
@@ -128,9 +129,17 @@ def find(event: dict, ctx: Context, text: str | None = None, use_unclean: bool =
         notes.append(f"같은 충격 등급({CLASS_KO.get(my_class, my_class)}) 사건이 부족해 인접 등급 사건을 가중치 절반으로 보충했습니다.")
     if picks and soft and all((p.get("closeness") or 0) < 0.5 for p in picks):
         notes.append(f"강도가 비슷한(점수 차 20 이내) 과거 사건이 없어, 강도가 다른 사건을 낮은 가중치로 썼습니다.")
+    partial = [p["id"] for p in picks if p.get("clean_factor", 1.0) < 1.0]
+    if partial:
+        notes.append(f"반응 창에 다른 발표가 겹친 사건 {len(partial)}건({', '.join(partial)})은 가중치를 "
+                     f"{cfg.get('partial_unclean_weight', 0.5)}배로 줄여 썼습니다.")
+    if tier == "pool":
+        notes.append("구조가 충분히 비슷한 과거 사건이 없어, 같은 수단 계열 사건 전체를 낮은 가중치로 썼습니다(pool). "
+                     "직접·완화 유사 사례보다 불확실성이 큽니다.")
+    pw = float(cfg.get("partial_unclean_weight", 0.0))
     excluded = [e["id"] for e in ctx.events
-                if e["id"] != event.get("id") and e.get("clean") is not True
-                and analog.direction(e) == analog.direction(event) and not use_unclean]
+                if e["id"] != event.get("id") and analog.direction(e) == analog.direction(event)
+                and not use_unclean and analog.clean_factor(e, True, pw) is None]
     return {
         "analogs": picks,
         "analog_tier": tier,

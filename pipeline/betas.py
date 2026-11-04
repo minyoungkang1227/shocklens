@@ -31,11 +31,40 @@ def ridge_betas(y: pd.DataFrame, X: pd.DataFrame, alpha: float) -> tuple[pd.Data
     return betas, pd.Series(r2, index=y.columns, name="r2")
 
 
+def choose_alpha_cv(y: pd.DataFrame, X: pd.DataFrame, grid=(0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0),
+                    n_folds: int = 5) -> tuple[float, pd.Series]:
+    """릿지 축소 강도를 시간 블록 교차검증으로 고른다 (표본 외 예측오차 최소).
+    alpha=1(기본)은 계수를 최소제곱의 절반 가까이 줄여 충격을 과소 전달할 수 있어, 데이터로 정한다."""
+    n = len(y)
+    edges = np.linspace(0, n, n_folds + 1).astype(int)
+    scores = {}
+    for a in grid:
+        err = 0.0
+        for k in range(n_folds):
+            te = np.arange(edges[k], edges[k + 1])
+            tr = np.setdiff1d(np.arange(n), te)
+            b, _ = ridge_betas(y.iloc[tr], X.iloc[tr], a)
+            pred = (X.iloc[te] - X.iloc[tr].mean()).to_numpy() @ b.to_numpy().T + y.iloc[tr].mean().to_numpy()
+            err += float(((y.iloc[te].to_numpy() - pred) ** 2).sum())
+        scores[a] = err
+    sc = pd.Series(scores, name="cv_sse")
+    return float(sc.idxmin()), sc
+
+
+def resolve_alpha(alpha, rets: pd.DataFrame, frets: pd.DataFrame) -> float:
+    """thresholds.betas.ridge_alpha 가 'cv' 면 교차검증으로 정한다."""
+    if isinstance(alpha, str) and alpha.lower() == "cv":
+        a, _ = choose_alpha_cv(rets, frets)
+        return a
+    return float(alpha)
+
+
 def crisis_mask(vix_level: pd.Series, quantile: float) -> pd.Series:
     return vix_level >= vix_level.quantile(quantile)
 
 
-def build(rets: pd.DataFrame, frets: pd.DataFrame, vix_level: pd.Series, alpha: float, q: float):
+def build(rets: pd.DataFrame, frets: pd.DataFrame, vix_level: pd.Series, alpha, q: float):
+    alpha = resolve_alpha(alpha, rets, frets)
     b_norm, r2_norm = ridge_betas(rets, frets, alpha)
     mask = crisis_mask(vix_level.reindex(rets.index), q)
     b_cris, r2_cris = ridge_betas(rets[mask], frets[mask], alpha)
@@ -44,13 +73,20 @@ def build(rets: pd.DataFrame, frets: pd.DataFrame, vix_level: pd.Series, alpha: 
     return b_norm, b_cris, cov_cris, r2, int(mask.sum())
 
 
-def run() -> None:
+def run(cv_report: bool = False) -> None:
     th = config.thresholds()["betas"]
     rets = pd.read_parquet(config.PROCESSED_DIR / "returns.parquet")
     frets = pd.read_parquet(config.PROCESSED_DIR / "factor_returns.parquet")
     levels = pd.read_parquet(config.PROCESSED_DIR / "factor_levels.parquet")
     vix_series = config.factors()["factors"]["risk_off"]["series"]
 
+    frets_al = frets.reindex(rets.index).dropna()
+    if cv_report:
+        a, sc = choose_alpha_cv(rets.reindex(frets_al.index), frets_al)
+        print("[betas] 교차검증 SSE (작을수록 좋음):")
+        print(sc.to_string())
+        print(f"[betas] 선택 alpha = {a}  (현재 설정 ridge_alpha = {th['ridge_alpha']})")
+        return
     b_norm, b_cris, cov_cris, r2, n_crisis = build(
         rets, frets, levels[vix_series], th["ridge_alpha"], th["crisis_vix_quantile"]
     )
@@ -64,4 +100,5 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    import sys
+    run(cv_report="--cv" in sys.argv)

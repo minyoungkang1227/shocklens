@@ -125,8 +125,25 @@ def top_overlap(a: dict[str, float], b: dict[str, float], k: int = 4) -> list[st
     return [x for _, x in sorted(shared, reverse=True)[:k]]
 
 
+# 발표 이후 전개·시장 반응을 적은 문장 (유사 사건 찾기·블라인드 채점 모두 '발표 당일 정보'만 써야 결과를 알고 고르는 일이 없다)
+AFTER = re.compile(r"(다음\s?날|이후|이튿날|직후 시장|시장은|급락|급등|반등|유예[됐했]|철회|결국|뒤에|나중에|\d{1,2}/\d{1,2}\s)")
+
+
+def announcement_only(description: str) -> str:
+    """설명문에서 발표 내용 문장만 남긴다. 첫 문장은 발표 자체이므로 항상 유지."""
+    sents = re.split(r"(?<=[.。])\s+", " ".join(str(description or "").split()))
+    keep = []
+    for x in sents:
+        if not x:
+            continue
+        if keep and AFTER.search(x):
+            break
+        keep.append(x)
+    return " ".join(keep)
+
+
 def event_text(ev: dict) -> str:
-    return f"{ev.get('title', '')}. {' '.join(str(ev.get('description', '')).split())}"
+    return f"{ev.get('title', '')}. {announcement_only(ev.get('description', ''))}"
 
 
 class TextIndex:

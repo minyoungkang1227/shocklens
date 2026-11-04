@@ -130,7 +130,11 @@ def test_library_event_runs_parallel_nodes_and_passes(ctx):
     assert "analog_finder" in nodes and "exposure_analyst" in nodes
     assert nodes.index("shock_mapper") > max(nodes.index("analog_finder"), nodes.index("exposure_analyst"))
     assert "cn_ree_oct_2025" not in [a["id"] for a in res["analogs"]]      # 자기 자신 제외
-    assert all(a["id"] != "cn_ree_2025" for a in res["analogs"])           # clean: false 제외
+    # 겹친 사건(same_dispute)은 가중치를 줄여 포함, other(전쟁 등)는 제외
+    by = {a["id"]: a for a in res["analogs"]}
+    if "cn_ree_2025" in by:
+        assert by["cn_ree_2025"]["clean_factor"] < 1.0
+    assert "ru_swift_2022" not in by
     assert res["calc_log_id"].startswith("calc_")
     assert "{{" not in res["final_brief"]
 

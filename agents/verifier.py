@@ -41,7 +41,8 @@ def _sentences(text: str) -> list[str]:
 
 
 def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_result: dict, event: dict,
-          llm: LLM | None = None, use_llm: bool = False, llm_mode: str = "reject") -> dict:
+          llm: LLM | None = None, use_llm: bool = False, llm_mode: str = "reject",
+          require_structure: bool = False) -> dict:
     """llm: 작성자(Reporter)와 다른 모델을 넘기는 것을 권장 (설정 llm.verifier_model).
     llm_mode: reject = LLM 지적도 반려 / warn = 경고로만 기록하고 통과 여부엔 반영 안 함"""
     warnings: list[str] = []
@@ -50,6 +51,13 @@ def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_resul
     left = sorted(set(re.findall(r"\{\{([A-Z0-9_]+)\}\}", final)))
     if left:
         issues.append(Issue(kind="placeholder", detail=f"채워지지 않은 자리표시: {left}", route="reporter"))
+    # 1-2 구성 누락: 본문(점검 목록 제외)에 필수 절과 계산 근거 문장이 충분한지 — 응답이 잘리면 숫자 검사만으로는 통과해 버린다
+    body = final.split("### 점검 목록")[0]
+    missing = [h for h in ("## 요약", "## 포트폴리오 영향") if h not in body]
+    n_calc = sum(1 for s in _sentences(body) if "[calc]" in s)
+    if require_structure and (missing or n_calc < 2):
+        issues.append(Issue(kind="incomplete", detail=f"브리핑 구성 누락: 절 {missing or '있음'}, 계산 근거 문장 {n_calc}개(최소 2)",
+                            route="reporter"))
     # 2
     allowed = set()
     for v in list(facts.values()) + list(sources.values()):     # 계산값 + 뉴스 원문에 있는 숫자만 허용

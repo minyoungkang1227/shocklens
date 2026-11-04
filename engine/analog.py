@@ -21,6 +21,17 @@
 7) 각 후보의 최종 가중치(weight) = 점수 x 등급 가중치. Shock Mapper가 가중 분포에 쓴다.
 8) (2026-11-02) 강도 연속 점수가 있으면 등급 칸 대신 '가까울수록 높은' 부드러운 가중을 쓴다:
    weight = 점수 x closeness(강도 차이). 사건이 적을 때 칸이 비는 문제가 없고, 등급 경계에서 갑자기 끊기지 않는다.
+
+표본 부족 대응 (2026-11-04)
+9) 겹친 사건 부분 사용: clean: false 사건도 겹침 종류(confounder_type)에 따라 나눈다.
+   - same_dispute (같은 분쟁의 맞대응이 같은 창에 겹침) / macro (FOMC·CPI·고용 발표가 겹침)
+     -> 가중치를 partial_unclean_weight(기본 0.5)배로 줄여 쓴다. 반응에 사건 외 요인이 섞였지만 방향·크기 정보는 남아 있다.
+   - other (전쟁 발발, 팬데믹, 반대 방향 사건) -> 제외
+   이렇게 하면 확대 방향 표본이 13건에서 22건으로 는다. (2025-04 희토류는 맞대응이지만 상호관세 급락장이 겹쳐 other)
+10) 수단 풀(pool) 층: relaxed_min 이상인 후보가 하나도 없으면 synthetic으로 바로 가지 않고,
+   같은 수단 계열(FAMILY)·같은 방향 사건 전체를 '풀'로 쓴다. weight = 수단 일치(1 또는 0.5) x 강도 근접도 x clean 계수.
+   경로 이름은 pool. 풀도 비면 synthetic.
+   찾기는 거칠게(층을 내려가며 넓힘), 읽기는 예민하게(textsim)라는 원칙.
 """
 from __future__ import annotations
 
@@ -96,10 +107,24 @@ def struct_score(a: dict, b: dict, weights: dict[str, float]) -> float:
     return sum(weights[k] * p[k] for k in weights)
 
 
+PARTIAL_TYPES = {"same_dispute", "macro"}
+
+
+def clean_factor(ev: dict, clean_only: bool, partial_weight: float) -> float | None:
+    """사건을 유사 사례로 쓸 때 곱할 계수. None이면 제외.
+    clean -> 1.0 / 겹침이 same_dispute·macro -> partial_weight / 그 밖(other, 표시 없음) -> clean_only면 제외, 아니면 partial_weight"""
+    if ev.get("clean") is True:
+        return 1.0
+    if ev.get("confounder_type") in PARTIAL_TYPES:
+        return partial_weight
+    return None if clean_only else partial_weight
+
+
 def rank(target: dict, library: list[dict], available: list[str], weights: dict[str, float],
          clean_only: bool = True, past_only: bool = False, text_sims: dict[str, float] | None = None,
-         text_weight: float = 0.0, classes: dict | None = None) -> list[dict]:
-    """후보 전체를 점수순으로 돌려준다. 각 항목: id, score, struct, text, parts, size_class, date."""
+         text_weight: float = 0.0, classes: dict | None = None, partial_weight: float = 0.0) -> list[dict]:
+    """후보 전체를 점수순으로 돌려준다. 각 항목: id, score, struct, text, parts, size_class, date, clean_factor.
+    partial_weight > 0 이면 겹친 사건(same_dispute·macro)을 그 계수로 포함한다."""
     out = []
     for ev in library:
         if ev["id"] == target.get("id") or ev["id"] not in available:
@@ -108,14 +133,17 @@ def rank(target: dict, library: list[dict], available: list[str], weights: dict[
             continue
         if direction(ev) != direction(target):
             continue
-        if clean_only and ev.get("clean") is not True:
+        cf = clean_factor(ev, clean_only, partial_weight) if partial_weight > 0 else (
+            1.0 if (ev.get("clean") is True or not clean_only) else None)
+        if cf is None:
             continue
         parts = score_parts(target, ev)
         struct = sum(weights[k] * parts[k] for k in weights)
         txt = (text_sims or {}).get(ev["id"])
         score = struct if txt is None else (1 - text_weight) * struct + text_weight * txt
         out.append({"id": ev["id"], "score": score, "struct": struct, "text": txt, "parts": parts,
-                    "size_class": size_class(ev.get("severity", 3), classes), "date": str(ev["date"])})
+                    "size_class": size_class(ev.get("severity", 3), classes), "date": str(ev["date"]),
+                    "clean_factor": cf})
     return sorted(out, key=lambda r: (-r["score"], r["date"]))
 
 
@@ -128,34 +156,52 @@ def select(target: dict, library: list[dict], available: list[str], cfg: dict,
     """
     tw = cfg.get("text_weight", 0.0) if text_sims else 0.0
     classes = cfg.get("size_classes")
-    ranked = rank(target, library, available, cfg["weights"], clean_only, past_only, text_sims, tw, classes)
+    pw = float(cfg.get("partial_unclean_weight", 0.0))
+    ranked = rank(target, library, available, cfg["weights"], clean_only, past_only, text_sims, tw, classes, pw)
     ok = [r for r in ranked if r["score"] >= cfg["relaxed_min"]]
     pts = {e["id"]: e.get("severity_points") for e in library}
     tp = target.get("severity_points")
     scale = cfg.get("closeness_scale", 20.0)   # thresholds.analog 또는 severity 어느 쪽에 있어도 됨
-    if tp is not None and any(pts.get(r["id"]) is not None for r in ok):
-        from .severity import closeness
-        for r in ok:
-            c = closeness(tp, pts[r["id"]], scale) if pts.get(r["id"]) is not None else 0.5
+    from .severity import closeness
+
+    def _close(r):
+        if tp is None or pts.get(r["id"]) is None:
+            return 0.5
+        return closeness(tp, pts[r["id"]], scale)
+
+    if not ok and cfg.get("pool_tier", False):
+        # 10) 수단 풀: 같은 수단 계열 전체를 낮은 가중치로 쓴다
+        pool = [r for r in ranked if r["parts"]["instrument"] > 0]
+        for r in pool:
+            c = _close(r)
             r["closeness"] = round(c, 3)
-            r["weight"] = r["score"] * c
+            r["weight"] = r["parts"]["instrument"] * c * r.get("clean_factor", 1.0)
+            r["pool"] = True
+        picked = sorted(pool, key=lambda r: -r["weight"])[: cfg.get("top_k", 3)]
+        if picked:
+            return [r["id"] for r in picked], "pool", ranked
+    if tp is not None and any(pts.get(r["id"]) is not None for r in ok):
+        for r in ok:
+            c = _close(r)
+            r["closeness"] = round(c, 3)
+            r["weight"] = r["score"] * c * r.get("clean_factor", 1.0)
         picked = sorted(ok, key=lambda r: -r["weight"])[: cfg.get("top_k", 3)]
     elif classes:
         my = size_class(target.get("severity", 3), classes)
         same = [r for r in ok if r["size_class"] == my]
         adj = [r for r in ok if _adjacent(r["size_class"], my)]
         for r in same:
-            r["weight"] = r["score"]
+            r["weight"] = r["score"] * r.get("clean_factor", 1.0)
         picked = same
         if len(same) < cfg.get("min_same_class", 2):
             for r in adj:
-                r["weight"] = r["score"] * cfg.get("adjacent_class_weight", 0.5)
+                r["weight"] = r["score"] * cfg.get("adjacent_class_weight", 0.5) * r.get("clean_factor", 1.0)
             picked = same + adj
         picked = sorted(picked, key=lambda r: -r["weight"])[: cfg.get("top_k", 3)]
     else:
         picked = ok[: cfg.get("top_k", 3)]
         for r in picked:
-            r["weight"] = r["score"]
+            r["weight"] = r["score"] * r.get("clean_factor", 1.0)
     if not picked:
         return [], "synthetic", ranked
     tier = "direct" if max(r["score"] for r in picked) >= cfg["direct_min"] else "relaxed"

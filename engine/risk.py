@@ -31,6 +31,27 @@ def scenario_losses(bshock: pd.DataFrame, weights: pd.Series) -> pd.Series:
     return pd.Series({s: float(portfolio_return(bshock[s].to_numpy()[None, :], w)[0]) for s in bshock.columns})
 
 
+def noise_band(rets: pd.DataFrame, weights: pd.Series, days: int = 3, q: float = 0.75,
+               exclude: list[tuple[str, str]] | None = None, asof: str | None = None) -> dict:
+    """사건이 없는 평소 날의 `days`거래일 포트폴리오 수익률 분포에서 '잡음 띠' 반폭을 구한다.
+    반폭 = |수익률|의 q 분위수. 예측구간 = [mild, severe] ± 반폭.
+    사건 효과만 담은 좁은 구간(평균 폭 1%p)에 평소 시장 변동(3일 표준편차 1.25%)을 얹는 보정.
+    exclude: (시작일, 종료일) 사건 창 목록 — 띠는 사건 무관일로만 잰다. asof: 그 날짜 이전 데이터만."""
+    w = weights.reindex(rets.columns).to_numpy() / weights.sum()
+    p = pd.Series(rets.to_numpy() @ w, index=rets.index)
+    if asof is not None:
+        p = p.loc[: pd.Timestamp(asof) - pd.Timedelta(days=1)]
+    p3 = p.rolling(days).sum().dropna()
+    keep = pd.Series(True, index=p3.index)
+    for a, b in (exclude or []):
+        # 반응 창은 발표일(a)부터 days거래일: 그 안에서 끝나는 누적 수익률을 모두 뺀다 (달력일로 넉넉히)
+        lo, hi = pd.Timestamp(a), pd.Timestamp(b) + pd.Timedelta(days=days * 3)
+        keep.loc[(p3.index >= lo) & (p3.index <= hi)] = False
+    v = p3[keep]
+    half = float(np.quantile(np.abs(v), q)) if len(v) else 0.0
+    return {"half_width": half, "q": q, "days": days, "n_days": int(len(v)), "sd": float(v.std()) if len(v) else 0.0}
+
+
 def block_bootstrap(rets: np.ndarray, eligible_starts: np.ndarray, horizon: int, block_len: int,
                     n_paths: int, rng: np.random.Generator) -> np.ndarray:
     """(T x N) 일별 로그수익률에서 horizon일 누적 수익률 경로 n_paths개를 만든다.

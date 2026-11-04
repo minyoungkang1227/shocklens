@@ -27,7 +27,17 @@ def load_events(path: Path = LIBRARY_FILE, severity_cfg: dict | None = None) -> 
     cfg = severity_cfg if severity_cfg is not None else config.thresholds().get("severity", {})
     weights = cfg.get("component_weights")
     use = cfg.get("use_components", True)
+    blind = {}
+    if cfg.get("labels", "human") == "blind":
+        # agents.relabel_severity 가 만든 블라인드 채점(발표 당일 정보만으로 LLM이 채점)으로 바꿔 쓴다
+        bf = path.parent / "severity_blind.yaml"
+        if bf.exists():
+            with open(bf, encoding="utf-8") as f:
+                blind = (yaml.safe_load(f) or {}).get("events", {})
     for e in events:
+        if e["id"] in blind:
+            e["severity_components_human"] = e.get("severity_components")
+            e["severity_components"] = blind[e["id"]]["severity_components"]
         comp = e.get("severity_components")
         if use and comp:
             e["severity_points"] = sev.score(comp, weights)

@@ -70,6 +70,9 @@ class Ledger:
                                "설명": "분해(①②③)는 기준 모형(블록 부트스트랩) 결과"}} if r.get("ensemble") else {}),
             "정규분포 가정의 과소추정": _pp(r["es_underestimation_normal"]),
             "발표 후 3거래일 시나리오 수익률": {k: _sp(v) for k, v in r["scenario_loss"].items()},
+            **({"3거래일 예측구간(평소 변동 포함)": {"하단": _sp(r["scenario_band"]["interval"]["lo"]),
+                                               "상단": _sp(r["scenario_band"]["interval"]["hi"])}}
+               if r.get("scenario_band") else {}),
         }
 
     def basket_breakdown(self, basket: str | None = None) -> dict:
