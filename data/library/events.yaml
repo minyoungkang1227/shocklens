@@ -126,6 +126,7 @@ events:
       - https://www.rappler.com/business/united-states-allies-target-russia-swift-ban-certain-banks-february-26-2022/
     confounders: [2/24 러시아의 우크라이나 침공과 전쟁 전개, 유가 급등]
     clean: false
+    confounder_type: other
 
   # ---------------- 미국 반도체 통제 ----------------
   - id: us_chip_2022
@@ -147,6 +148,7 @@ events:
       - https://clearygottlieb.com/news-and-insights/publication-listing/the-united-states-tightens-china-related-export-controls-on-advanced-computing-and-semiconductor-manufacturing-items
     confounders: [같은 날 9월 고용보고서 발표, 인플레이션·금리 급등장]
     clean: false
+    confounder_type: macro
 
   - id: us_chip_2023
     date: "2023-10-17"
@@ -167,6 +169,7 @@ events:
       - https://squirepattonboggs.com/en/insights/publications/2023/10/semiconductor-and-advanced-computing-export-control-rules-modifying-and-reinforcing-the-restrictions-initially-released-on-october-7-2022
     confounders: [같은 날 소매판매 호조로 금리 급등, 10년물 5% 근접, 이스라엘-하마스 전쟁 초기]
     clean: false
+    confounder_type: macro
 
   # ---------------- 중국 자원 수출통제 ----------------
   - id: cn_ga_ge_2023
@@ -191,6 +194,7 @@ events:
       - 미국 독립기념일 연휴로 7/3 조기 폐장, 7/4 휴장
       - 7/6 ADP 민간고용 급증으로 10년물 4% 돌파, S&P500 하락 (반응 창 3일째, 사건과 무관한 금리 충격)
     clean: false
+    confounder_type: macro
 
   - id: cn_ban_us_2024
     date: "2024-12-03"
@@ -233,6 +237,7 @@ events:
       - https://globaltimes.cn/page/202504/1331472.shtml?id=12
     confounders: [같은 날 중국의 대미 34% 보복관세 발표, 4/2 미국 상호관세 발표 직후 급락장]
     clean: false
+    confounder_type: other   # 같은 분쟁의 맞대응이지만 상호관세 급락장(4/2~)이 겹쳐 반응 크기를 믿을 수 없음
 
   - id: cn_ree_oct_2025
     date: "2025-10-09"
@@ -405,6 +410,7 @@ events:
       - https://www.jdsupra.com/legalnews/us-and-eu-impose-additional-sanctions-on-15773/
     confounders: [3/19 FOMC(옐런 '6개월' 발언으로 금리 급등) - 반응 창 3일째]
     clean: false
+    confounder_type: macro
 
   - id: us_steel_2018
     date: "2018-03-01"
@@ -425,6 +431,7 @@ events:
       - https://republicofmining.com/2018/03/01/trump-says-u-s-to-impose-steep-tariffs-on-steel-aluminum-imports-by-steve-holland-and-ginger-gibson-reuters-u-s-march-1-2018
     confounders: [파월 의장 의회 증언(2/27~3/1) 이후 금리 인상 가속 우려가 같이 반영]
     clean: false
+    confounder_type: macro
 
   - id: us_iran_2018
     date: "2018-05-08"
@@ -467,6 +474,7 @@ events:
       - https://globaltradealert.org/state-act/82104-japan-government-announces-export-control-measures-to-the-repulic-of-korea
     confounders: [6/29 G20 오사카 미중 무역휴전 합의 직후 첫 거래일(시장은 휴전에 반응해 상승)]
     clean: false
+    confounder_type: other
 
   - id: us_fdpr_2020
     date: "2020-05-15"
@@ -488,6 +496,7 @@ events:
       - https://wiley.law/alert-Commerce-Ramps-Up-Huawei-Export-Restrictions-Foreign-Suppliers-Beware
     confounders: [코로나19 초기 고변동성 국면, 5/18 백신 임상 결과 발표로 급반등]
     clean: false
+    confounder_type: other
 
   - id: us_outbound_2023
     date: "2023-08-09"
@@ -510,6 +519,7 @@ events:
       - https://www.venable.com/insights/publications/2023/08/biden-administration-issues-long-anticipated
     confounders: [8/10 7월 CPI 발표 - 반응 창 첫날]
     clean: false
+    confounder_type: macro
 
   - id: us_ev_2024
     date: "2024-05-14"
@@ -531,6 +541,7 @@ events:
       - https://www.cbsnews.com/news/biden-to-announce-new-100-tariffs-on-chinese-evs
     confounders: [5/15 4월 CPI 발표 후 증시 사상 최고치 - 반응 창 2일째]
     clean: false
+    confounder_type: macro
 
   # ---------------- 산업정책 법령 (장기 효과 분석용, clean: false -> 단기 충격 추정에는 쓰지 않음) ----------------
   - id: us_ira_2022
@@ -554,6 +565,7 @@ events:
       - https://www.whitehouse.gov/briefing-room/statements-releases/2022/07/27/statement-from-president-biden-on-inflation-reduction-act-of-2022/
     confounders: [7/27 FOMC 75bp 인상(같은 날), 7/28 2분기 GDP 발표]
     clean: false
+    confounder_type: macro
 
   - id: us_chips_2022
     date: "2022-08-09"
@@ -575,3 +587,4 @@ events:
       - https://www.mayerbrown.com/en/insights/publications/2022/08/president-biden-signs-chips-act-into-law
     confounders: [8/10 7월 CPI 발표 - 반응 창 첫날]
     clean: false
+    confounder_type: macro
