@@ -8,6 +8,7 @@ data/raw/
 data/processed/
 data/model/
 data/calc_logs/
+data/snapshot/
 
 # Python
 __pycache__/
