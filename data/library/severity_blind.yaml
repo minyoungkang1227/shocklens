@@ -1,0 +1,555 @@
+generated_by: claude-sonnet-5-5
+n_samples: 3
+events:
+  us_301_2018:
+    severity_components:
+      scope: 4
+      immediacy: 2
+      substitut: 3
+      escalation: 4
+      parties: 3
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 55.0
+    severity: 3
+    human_points: 47.5
+    human_level: 3
+    text_used: 2018-03-22 미국, 301조 조사 결과에 따른 대중 관세(최대 600억 달러) 각서 서명. 트럼프 대통령이 301조
+      조사(기술이전·지재권) 결과를 근거로 항공우주·정보통신·로봇·기계 등 중국산 제품에 관세를 부과하라는 대통령 각서에 서명. 미중 무역전쟁의
+      출발점.
+  us_tariff_2019:
+    severity_components:
+      scope: 4
+      immediacy: 4
+      substitut: 3
+      escalation: 5
+      parties: 2
+      surprise: 5
+    spread:
+      scope: 1
+      immediacy: 0
+      substitut: 1
+      escalation: 1
+      parties: 0
+      surprise: 0
+    severity_points: 72.5
+    severity: 4
+    human_points: 72.5
+    human_level: 3
+    text_used: 2019-05-05 트럼프, 2000억 달러 중국산 관세 10%→25% 인상 예고 (트윗, 5/10 시행). 협상이 타결에
+      가까워 보이던 시점에 일요일 트윗으로 관세 인상과 3250억 달러 추가 관세를 예고. 반응은 다음 거래일(5/6)부터.
+  us_huawei_2019:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 4
+      escalation: 4
+      parties: 3
+      surprise: 4
+    spread:
+      scope: 1
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 1
+    severity_points: 75.0
+    severity: 4
+    human_points: 63.7
+    human_level: 3
+    text_used: 2019-05-15 미국 상무부, 화웨이와 계열사 68곳 엔티티 리스트 지정 (5/16 효력). 화웨이에 미국산 부품·소프트웨어·기술을
+      팔려면 허가가 필요해짐. 같은 날 정보통신 공급망 국가비상사태 행정명령.
+  cn_fx7_2019:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 3
+      escalation: 5
+      parties: 3
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 1
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 75.0
+    severity: 4
+    human_points: 83.8
+    human_level: 4
+    text_used: 2019-08-05 위안화 달러당 7위안 돌파, 미국 재무부 중국 환율조작국 지정. 인민은행이 기준환율을 예상보다 약하게
+      고시해 위안화가 2008년 이후 처음 7위안을 넘었고, 중국은 미국산 농산물 구매도 중단. 같은 날 밤 미국 재무부가 환율조작국으로 지정.
+  ru_swift_2022:
+    severity_components:
+      scope: 5
+      immediacy: 4
+      substitut: 4
+      escalation: 5
+      parties: 5
+      surprise: 5
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 92.5
+    severity: 5
+    human_points: 61.3
+    human_level: 4
+    text_used: 2022-02-26 미국·EU 등, 러시아 은행 SWIFT 배제와 러시아 중앙은행 외환보유액 동결 합의. 공동성명으로 일부
+      러시아 은행의 SWIFT 배제와 중앙은행 외환보유액 사용 제한을 약속. 토요일 발표라 반응은 2/28부터.
+  us_chip_2022:
+    severity_components:
+      scope: 5
+      immediacy: 4
+      substitut: 4
+      escalation: 4
+      parties: 3
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 76.2
+    severity: 4
+    human_points: 61.3
+    human_level: 3
+    text_used: 2022-10-07 미국 BIS, 대중 첨단 반도체·장비 수출통제 (10월 7일 규칙). 첨단 컴퓨팅 칩, 슈퍼컴퓨터,
+      반도체 제조장비의 대중 수출을 허가제로 묶은 대규모 통제.
+  us_chip_2023:
+    severity_components:
+      scope: 4
+      immediacy: 3
+      substitut: 4
+      escalation: 4
+      parties: 3
+      surprise: 2
+    spread:
+      scope: 0
+      immediacy: 1
+      substitut: 0
+      escalation: 1
+      parties: 0
+      surprise: 0
+    severity_points: 57.5
+    severity: 3
+    human_points: 51.2
+    human_level: 3
+    text_used: 2023-10-17 미국 BIS, 대중 반도체 수출통제 강화 (2022년 규칙 보완). 칩 성능 기준을 조정해 통제 대상을
+      넓히고, 장비 통제와 엔티티 리스트(13곳)를 보강.
+  cn_ga_ge_2023:
+    severity_components:
+      scope: 3
+      immediacy: 3
+      substitut: 3
+      escalation: 4
+      parties: 4
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 57.5
+    severity: 3
+    human_points: 52.5
+    human_level: 3
+    text_used: 2023-07-03 중국, 갈륨·게르마늄 수출통제 발표 (8월 1일 시행). 중국 상무부와 해관총서가 반도체 원료인 갈륨·게르마늄
+      관련 품목에 수출 허가제를 도입한다고 발표. 미국과 동맹국의 대중 반도체 장비 통제에 대한 대응으로 해석됨.
+  cn_ban_us_2024:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 4
+      escalation: 4
+      parties: 2
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 1
+    severity_points: 66.2
+    severity: 4
+    human_points: 66.2
+    human_level: 3
+    text_used: 2024-12-03 중국, 갈륨·게르마늄·안티몬 대미 수출 원칙적 금지. 중국 상무부 공고 2024년 제46호. 이중용도
+      품목인 갈륨·게르마늄·안티몬·초경질 소재의 대미 수출을 원칙적으로 불허하고 흑연은 최종 사용자 심사를 강화. 전날(12/2) 미국의 대중
+      반도체 추가 통제 직후 발표.
+  cn_ree_2025:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 4
+      escalation: 4
+      parties: 3
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 70.0
+    severity: 4
+    human_points: 71.2
+    human_level: 4
+    text_used: 2025-04-04 중국, 중·중희토류 7종 수출통제 (즉시 시행). 상무부·해관총서 공고 2025년 제18호. 사마륨·가돌리늄·테르븀·디스프로슘·루테튬·스칸듐·이트륨
+      관련 품목을 수출통제 목록에 올림. 미국 상호관세에 대한 보복 조치의 하나.
+  cn_ree_oct_2025:
+    severity_components:
+      scope: 5
+      immediacy: 3
+      substitut: 5
+      escalation: 4
+      parties: 4
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 80.0
+    severity: 5
+    human_points: 87.5
+    human_level: 4
+    text_used: 2025-10-09 중국, 희토류 수출통제 대폭 확대 (역외 적용·기술 통제, 공고 61·62호). 중국산 희토류가 0.1%
+      이상 들어간 해외 제품까지 허가 대상으로 넓히고(역외 적용), 희토류 채굴·제련·자석 기술도 통제.
+  us_pause_2025:
+    severity_components:
+      scope: 5
+      immediacy: 5
+      substitut: 3
+      escalation: 3
+      parties: 5
+      surprise: 5
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 1
+      parties: 0
+      surprise: 0
+    severity_points: 85.0
+    severity: 5
+    human_points: 73.8
+    human_level: 4
+    text_used: 2025-04-09 트럼프, 상호관세 90일 유예 (중국은 125%로 인상). 상호관세 시행 약 14시간 만에 중국을 뺀
+      국가에 90일 유예와 10% 기본관세를 발표.
+  us_cn_geneva_2025:
+    severity_components:
+      scope: 5
+      immediacy: 4
+      substitut: 3
+      escalation: 2
+      parties: 3
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 1
+      surprise: 0
+    severity_points: 65.0
+    severity: 4
+    human_points: 60.0
+    human_level: 3
+    text_used: 2025-05-12 미중 제네바 공동성명, 상호 관세 115%p 인하 (90일). 제네바 협상 결과로 미국의 대중 관세는
+      30%, 중국의 대미 관세는 10%로 낮추고 90일간 협상하기로 합의.
+  us_steel_2002:
+    severity_components:
+      scope: 2
+      immediacy: 4
+      substitut: 3
+      escalation: 4
+      parties: 4
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 56.2
+    severity: 3
+    human_points: 25.0
+    human_level: 2
+    text_used: 2002-03-05 부시 행정부, 수입 철강 세이프가드 관세(8~30%) 발표. 무역법 201조 세이프가드로 주요 철강
+      제품에 3년간 8~30% 관세를 부과한다고 발표(3/20 시행). EU가 즉시 보복을 예고. 철강에 한정된 조치라 시장 전반 영향은 제한적이었다.
+  cn_depeg_2005:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 3
+      escalation: 2
+      parties: 3
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 63.8
+    severity: 4
+    human_points: 58.8
+    human_level: 2
+    text_used: 2005-07-21 중국, 위안화 달러 페그 폐지와 2.1% 절상 (복수통화 바스켓 관리변동). 인민은행이 10년간 유지한
+      달러당 8.28위안 페그를 폐지하고 8.11위안으로 절상. 미국 의회의 보호무역 압력을 완화하는 조치로 받아들여졌다(완화 방향). 위안화
+      채널은 이 날부터 데이터가 의미를 가진다.
+  us_tire_2009:
+    severity_components:
+      scope: 2
+      immediacy: 4
+      substitut: 3
+      escalation: 3
+      parties: 2
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 1
+    severity_points: 45.0
+    severity: 3
+    human_points: 27.5
+    human_level: 2
+    text_used: 2009-09-11 오바마 행정부, 중국산 타이어 세이프가드 관세(35%) 부과. 무역법 421조로 중국산 승용차·경트럭
+      타이어에 3년간 35·30·25% 추가 관세.
+  cn_ree_jp_2010:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 4
+      escalation: 3
+      parties: 2
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 67.5
+    severity: 4
+    human_points: 65.0
+    human_level: 3
+    text_used: 2010-09-22 중국, 센카쿠 어선 충돌 이후 대일 희토류 수출 사실상 중단. 어선 선장 구금에 대한 대응으로 중국
+      기업들의 대일 희토류 수출이 9/21경부터 멈췄다는 보도. 중국 정부는 공식 금수는 부인.
+  ru_crimea_2014:
+    severity_components:
+      scope: 2
+      immediacy: 4
+      substitut: 2
+      escalation: 3
+      parties: 4
+      surprise: 2
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 1
+      surprise: 0
+    severity_points: 43.8
+    severity: 3
+    human_points: 26.2
+    human_level: 2
+    text_used: 2014-03-17 미국·EU, 크림반도 합병 관련 러시아 고위 인사 제재. 크림 주민투표 다음 날 미국(행정명령 13661)과
+      EU가 러시아·우크라이나 인사 자산동결·여행금지. 개인 대상의 제한적 제재라 시장 영향은 작았다.
+  us_steel_2018:
+    severity_components:
+      scope: 4
+      immediacy: 4
+      substitut: 3
+      escalation: 4
+      parties: 4
+      surprise: 4
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 71.2
+    severity: 4
+    human_points: 35.0
+    human_level: 3
+    text_used: 2018-03-01 트럼프, 철강 25%·알루미늄 10% 관세 예고 (232조). 철강·알루미늄 업계 간담회에서 다음 주
+      관세 부과를 발표. EU·캐나다가 보복을 예고하며 무역전쟁 우려가 커졌다.
+  us_iran_2018:
+    severity_components:
+      scope: 5
+      immediacy: 3
+      substitut: 3
+      escalation: 4
+      parties: 4
+      surprise: 3
+    spread:
+      scope: 1
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 1
+    severity_points: 67.5
+    severity: 4
+    human_points: 41.2
+    human_level: 3
+    text_used: 2018-05-08 미국, 이란 핵합의(JCPOA) 탈퇴와 제재 재부과 발표. 트럼프 대통령이 핵합의 탈퇴와 '최고 수준'
+      제재 재부과를 발표(통화·금속 8/6, 원유·금융 11/4).
+  jp_kr_2019:
+    severity_components:
+      scope: 4
+      immediacy: 5
+      substitut: 4
+      escalation: 4
+      parties: 3
+      surprise: 5
+    spread:
+      scope: 1
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 1
+      surprise: 1
+    severity_points: 80.0
+    severity: 5
+    human_points: 45.0
+    human_level: 2
+    text_used: 2019-07-01 일본, 대한국 반도체 소재 3종(불화수소·포토레지스트·폴리이미드) 수출규제 발표. 일본 경제산업성이
+      반도체·디스플레이 소재 3종의 포괄 수출허가를 개별 허가로 바꾼다고 발표(7/4 시행). 강제징용 판결을 둘러싼 갈등이 배경.
+  us_fdpr_2020:
+    severity_components:
+      scope: 4
+      immediacy: 3
+      substitut: 4
+      escalation: 4
+      parties: 3
+      surprise: 3
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 62.5
+    severity: 4
+    human_points: 60.0
+    human_level: 3
+    text_used: 2020-05-15 미국 상무부, 화웨이 겨냥 해외직접생산품규칙(FDPR) 확대. 미국 기술·소프트웨어로 만든 해외 생산
+      반도체도 화웨이에 공급하려면 허가를 받도록 규칙을 확대(즉시 시행, 120일 유예). 중국은 '신뢰할 수 없는 기업 명단'으로 대응을 예고.
+  us_outbound_2023:
+    severity_components:
+      scope: 3
+      immediacy: 2
+      substitut: 3
+      escalation: 3
+      parties: 2
+      surprise: 2
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 1
+      surprise: 0
+    severity_points: 37.5
+    severity: 2
+    human_points: 23.8
+    human_level: 2
+    text_used: 2023-08-09 바이든, 대중 첨단기술(반도체·양자·AI) 해외투자 제한 행정명령. 미국인의 중국 반도체·양자·AI
+      기업 투자를 금지하거나 신고하도록 하는 프로그램 신설. 예상보다 범위가 좁고 시행이 늦어 시장 영향은 제한적이었다.
+  us_ev_2024:
+    severity_components:
+      scope: 2
+      immediacy: 3
+      substitut: 3
+      escalation: 3
+      parties: 2
+      surprise: 2
+    spread:
+      scope: 1
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 36.2
+    severity: 2
+    human_points: 31.2
+    human_level: 2
+    text_used: 2024-05-14 바이든, 중국산 전기차 관세 100%·반도체 50% 등 301조 관세 인상. 180억 달러 규모 중국산
+      제품의 관세 인상. 전기차 100%(4배), 반도체 50%(2025년), 배터리 25% 등. 실제 수입 규모가 작아 상징적 성격이 강하다는
+      평가.
+  us_ira_2022:
+    severity_components:
+      scope: 4
+      immediacy: 2
+      substitut: 3
+      escalation: 3
+      parties: 3
+      surprise: 5
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 1
+      parties: 0
+      surprise: 0
+    severity_points: 61.3
+    severity: 4
+    human_points: 53.8
+    human_level: 3
+    text_used: 2022-07-27 슈머·맨친, 인플레이션 감축법(IRA) 기습 합의 (청정에너지 3,698억 달러, 8/16 서명).
+      협상 결렬로 알려졌던 기후·세제 법안이 기습 합의로 부활. 청정에너지 세액공제에 북미 생산· 우려 국가(중국 등) 배제 요건이 붙어 공급망
+      재편을 유도하는 산업정책 법령.
+  us_chips_2022:
+    severity_components:
+      scope: 4
+      immediacy: 3
+      substitut: 3
+      escalation: 3
+      parties: 3
+      surprise: 1
+    spread:
+      scope: 0
+      immediacy: 0
+      substitut: 0
+      escalation: 0
+      parties: 0
+      surprise: 0
+    severity_points: 45.0
+    severity: 3
+    human_points: 32.5
+    human_level: 2
+    text_used: 2022-08-09 바이든, 반도체법(CHIPS and Science Act) 서명 (반도체 제조 지원 527억 달러).
+      7/27 상원, 7/28 하원 통과 후 서명. 보조금을 받는 기업의 중국 내 첨단 생산 확대를 제한하는 가드레일 포함. 통과 시점에 이미
+      알려져 서명일의 의외성은 낮다.

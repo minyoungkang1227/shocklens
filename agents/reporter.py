@@ -21,7 +21,8 @@ TIER_KO = {"direct": "직접 유사 사례", "relaxed": "완화된 유사 사례
 INST_KO = {"tariff": "관세", "tariff_pause": "관세 유예·인하", "tech_export_control": "기술 수출통제",
            "entity_list": "거래제한 명단", "resource_export_control": "자원 수출통제",
            "currency": "환율", "financial_sanction": "금융제재", "chokepoint_disruption": "요충지·공급 차단",
-           "industrial_subsidy": "산업 보조금·현지화", "investment_restriction": "투자 제한"}
+           "industrial_subsidy": "산업 보조금·현지화", "investment_restriction": "투자 제한",
+           "domestic_regulation": "국내 규제", "election_shift": "선거발 정책 전환"}
 
 
 COUNTRY_KO = {"US": "미국", "CN": "중국", "EU": "EU", "JP": "일본", "TW": "대만", "KR": "한국", "IN": "인도",
@@ -29,7 +30,8 @@ COUNTRY_KO = {"US": "미국", "CN": "중국", "EU": "EU", "JP": "일본", "TW": 
               "IR": "이란", "GLOBAL": "다수 국가"}
 SECTOR_KO = {"semiconductor": "반도체", "telecom": "통신", "defense": "방산", "autos": "자동차",
              "industrials": "산업재", "energy": "에너지", "banks": "은행", "agriculture": "농산물",
-             "battery": "배터리", "critical_minerals": "핵심광물", "pharma": "제약", "shipping": "해운"}
+             "battery": "배터리", "critical_minerals": "핵심광물", "pharma": "제약", "shipping": "해운",
+             "tech_platform": "플랫폼·소프트웨어", "ai_infra": "AI 데이터센터", "utilities": "전력·유틸리티"}
 STAGE_KO = {"announce": "발표", "escalate": "확대", "enforce": "시행", "retaliate": "보복", "ease": "완화"}
 
 
@@ -193,6 +195,9 @@ def warnings_list(state: dict) -> list[str]:
     if ev.get("instrument") in ("industrial_subsidy", "investment_restriction"):
         w.append("산업정책·투자 제한 법령은 효과가 몇 달에 걸쳐 나타나 단기 ES에 다 담기지 않습니다. "
                  "과거 같은 유형 법령 이후의 장기 업종 초과수익은 '장기 효과(법령)' 분석에서 확인하십시오.")
+    if ev.get("instrument") in ("domestic_regulation", "election_shift"):
+        w.append("국내 정책 사건입니다. 과거 비교 사건이 지경학 사건보다 적어(중국 플랫폼 규제·미국 선거 등) "
+                 "충격 크기의 불확실성이 큽니다. 규제가 '가능성' 단계면 실제 법안 내용에 따라 반응이 크게 달라질 수 있습니다.")
     att = state.get("attention") or {}
     if att.get("note"):
         w.append(att["note"])
@@ -236,8 +241,10 @@ def template_draft(state: dict, ctx: Context) -> str:
          f"평상시 대비 {{{{TOTAL_EFFECT}}}} 변화입니다 [calc]."),
         "",
         "## 무엇이 일어났나",
-        f"{josa(who)} {josa(tg, '을를')} 대상으로 {INST_KO[ev['instrument']]} 조치를 "
-        f"취했습니다({STAGE_KO.get(ev['stage'], ev['stage'])} 단계, 강도 {ev['severity']}/5, 점수 {ev.get('severity_points', 0):.0f}/100) {tag_ev}.",
+        (f"{who}에서 자국 산업을 겨냥한 {INST_KO[ev['instrument']]} 사건이 있었습니다"
+         if ev.get("target") == [ev.get("initiator")] else
+         f"{josa(who)} {josa(tg, '을를')} 대상으로 {INST_KO[ev['instrument']]} 조치를 취했습니다")
+        + f"({STAGE_KO.get(ev['stage'], ev['stage'])} 단계, 강도 {ev['severity']}/5, 점수 {ev.get('severity_points', 0):.0f}/100) {tag_ev}.",
     ]
     if ev.get("sectors"):
         s_sec = ",".join(ev.get("evidence", {}).get("sectors", [])[:1])

@@ -1,0 +1,28 @@
+# 매일 핫토픽 감시 (python -m agents.daily_watch) 설정
+# 지역마다 RSS 피드에서 헤드라인을 모아 '오늘 가장 많이 다뤄진 토픽'을 고르고,
+# 정책 사건이면 ShockLens 전체 분석(ES·파급 경로), 아니면 정성 메모만 남긴다.
+# 피드 하나가 막혀도 나머지로 계속한다. 피드 주소는 자유롭게 바꿔도 된다.
+
+regions:
+  KR:
+    label: 국내
+    feeds:
+      - {name: Google 뉴스 경제(한국), url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ko&gl=KR&ceid=KR:ko"}
+      - {name: Google 뉴스 주요(한국), url: "https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko"}
+      - {name: 연합뉴스 경제, url: "https://www.yna.co.kr/rss/economy.xml"}
+      - {name: 연합뉴스 국제, url: "https://www.yna.co.kr/rss/international.xml"}
+  US:
+    label: 미국
+    feeds:
+      - {name: Google News Business (US), url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"}
+      - {name: Google News Top (US), url: "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"}
+      - {name: CNBC Top News, url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"}
+      - {name: CNBC Markets, url: "https://www.cnbc.com/id/15839069/device/rss/rss.html"}
+
+max_headlines_per_feed: 40
+topics_per_region: 3         # 지역마다 보고할 상위 토픽 수
+analyze_per_region: 1        # 그중 ShockLens 정량 분석까지 돌릴 토픽 수 (정책 사건만, 1개당 수십 초)
+cluster_threshold: 0.35      # 규칙 경로: 헤드라인 문장 유사도가 이 이상이면 같은 토픽
+fetch_article: true          # 토픽 대표 기사 본문을 가져와 분석 (실패하면 헤드라인 묶음으로)
+stale_data_days: 4           # 가격 데이터가 이 영업일 이상 오래되면 경고 (--refresh로 갱신)
+output_dir: data/daily       # 보고서 저장 위치 (같은 날 다시 돌리면 _v2, _v3)

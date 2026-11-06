@@ -216,6 +216,20 @@ ShockLens의 핵심은 '사건 하나 → 단기 꼬리 손실'이고, 아래 �
 
 **역스트레스테스트 (`engine/reverse.py`, `python -m agents.reverse`).** 목표 손실 L(또는 목표 ES → L = 목표 ES − 지금 ES)을 내는 가장 그럴듯한 요인 충격을 닫힌 해 x* = −L·Σb/(bᵀΣb)로 구한다. b = 바스켓 베타의 비중 가중합, Σ = 3거래일 요인 공분산(위기 국면이면 위기 날짜로). 그럴듯함은 마할라노비스 거리, 정규 가정 확률 1−Φ(d), 과거 3거래일 창의 실제 빈도로 보여주고, 가장 닮은 과거 사건(코사인 유사도)을 붙인다. 움직일 요인을 지경학 채널로 제한할 수 있고, 구한 충격을 그대로 가상 시나리오로 실행해 브리핑·구조 점검·후속 질문까지 받을 수 있다.
 
+## 4-5. 국내 정책 사건과 데일리 워치 (2026-11-06)
+
+**왜:** 2026-11-05 미국 중간선거 후 'AI 데이터센터 규제 우려'로 나스닥 −5.5%, 필라델피아 반도체 −12%, 코스피 −6%가 났지만, 기존 구조는 '국가가 다른 국가를 겨냥한 수단'만 받아 판단 보류로 끝났다(대상국 없음, 맞는 수단 없음).
+
+**수단 2종 추가:** `domestic_regulation`(자국 산업 규제·반독점·인프라 건설 제한), `election_shift`(선거·정권 교체로 정책 기대가 바뀐 단계). 둘 다 수단 계열 `domestic`이라 수단 점수에서 지경학 사건과 구분되고, pool 층에서는 서로 보충한다. 국내 정책 사건은 발동국 = 대상국을 허용하고, 대상국이 비면 발동국으로 채운다. 기본 채널은 각각 {반도체 상대수익 −, 위험회피 +}, {위험회피 +}.
+
+**산업 3종 추가:** `tech_platform`(플랫폼·소프트웨어·클라우드), `ai_infra`(AI 데이터센터), `utilities`(전력). 노출표: ai_infra는 반도체·대만 high, 미국 주식·인프라 mid / tech_platform은 중국 주식 high / utilities는 인프라·부동산 high. 국내 정책 사건에서 다른 나라 주식 바스켓의 같은 산업은 한 단계 낮춘다(미국 데이터센터 규제 → 대만 mid, 중국 none).
+
+**방향 읽기:** '건설 유예', '신규 승인 중단', 'moratorium'은 완화어가 아니라 확대 신호로 읽는다(`textsim.EASE_ENDED`).
+
+**사건 6건 추가 (32건):** 알리바바 반독점(2020-12), 디디 사이버보안 심사(2021-07), 중국 사교육 금지(2021-07) — clean / 미국 빅테크 반독점 조사(2019-06), 조지아 결선 민주당 승리(2021-01) — 다른 충격이 겹쳐 제외(other) / 2018 중간선거(완화, macro). 깨끗한 국내 규제 사건이 모두 중국이라 미국 국내 규제는 pool 경로로 중국 사례를 낮은 가중치로 쓴다 — 브리핑에 경고가 붙는다. 2026-11-05 사건은 반응 데이터가 쌓인 뒤 추가한다.
+
+**데일리 워치 (`agents/daily_watch.py`):** RSS 수집(지역별, 막힌 피드는 기록 후 계속) → 토픽 선택(LLM: 헤드라인 번호로 묶고 정책 사건 여부·정성 파급 경로, 목록 밖 번호와 문장 속 숫자는 코드가 제거 / 규칙: 문장 유사도 묶음, 매체 수·기사 수 순위) → 정책 사건 토픽만 `hq.run_news`(대표 기사 본문, 실패하면 헤드라인 묶음) → 마크다운·JSON 저장(같은 날 `_v2`). 가격 데이터가 영업일 4일 이상 묵으면 국면 판단이 낡았다고 경고한다. Windows 작업 스케줄러 등록 스크립트 `scripts/register_daily_watch.ps1`.
+
 ## 5. 구현 위치
 
-`agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py`
+`agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · 테스트 `tests/test_domestic_daily.py`

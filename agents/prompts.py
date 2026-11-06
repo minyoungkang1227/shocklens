@@ -15,11 +15,15 @@ EVENT_SYSTEM = f"""당신은 국부펀드 리스크관리팀의 지경학 사건
   entity_list=특정 기업 거래제한(엔티티 리스트 등), resource_export_control=희토류·광물 등 자원 수출통제,
   currency=환율 절하·환율조작국 지정, financial_sanction=금융제재·자산동결·결제망 배제,
   chokepoint_disruption=해협·운하·항로 봉쇄나 핵심 공급 차단, industrial_subsidy=보조금·세액공제·현지화 요건을 담은 산업정책 법령,
-  investment_restriction=해외투자·인수합병 제한(대외투자 심사 등)
+  investment_restriction=해외투자·인수합병 제한(대외투자 심사 등),
+  domestic_regulation=자국 산업 규제·반독점·인프라(데이터센터 등) 건설 제한 같은 국내 규제 강화(완화면 direction=ease),
+  election_shift=선거·정권 교체로 정책 기대가 바뀐 사건(규제 법안이 아직 없고 '가능성'만 있는 단계)
+  국내 정책 사건(domestic_regulation, election_shift)은 발동국과 대상국이 같을 수 있습니다: initiator=US, target=["US"].
 - direction: escalate(갈등 확대) / ease(완화)
 - stage: {STAGES}  (announce=첫 발표, escalate=추가 확대, enforce=실제 시행, retaliate=보복, ease=완화)
 - 국가 코드: {COUNTRIES}
 - 산업: {SECTORS}
+  tech_platform=인터넷·플랫폼·소프트웨어·클라우드, ai_infra=AI 데이터센터·AI 인프라(칩 수요처), utilities=전력·유틸리티
 - channels 팩터: {FACTORS}
   risk_off=VIX(위험회피, +1=상승), dollar=달러, cny=달러/위안(+1=위안 약세), oil=유가, ust10y=미 10년물 금리,
   credit=하이일드-국채(-1=신용 스트레스), tech_war=반도체-시장(-1=반도체 약세)

@@ -14,6 +14,7 @@ INSTRUMENT_TERMS = {
     "entity_list": '"entity list"', "resource_export_control": '"rare earth" OR gallium OR germanium',
     "currency": "yuan currency", "financial_sanction": "sanctions", "chokepoint_disruption": "blockade OR strait",
     "industrial_subsidy": "subsidies tax credit", "investment_restriction": '"outbound investment"',
+    "domestic_regulation": 'regulation OR antitrust OR "data center"', "election_shift": "election",
 }
 COUNTRY_TERMS = {"US": "United States", "CN": "China", "EU": "European Union", "JP": "Japan", "TW": "Taiwan",
                  "KR": "Korea", "RU": "Russia", "IN": "India", "IR": "Iran"}

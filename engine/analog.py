@@ -46,6 +46,8 @@ FAMILY = {
     "chokepoint_disruption": "supply",
     "industrial_subsidy": "industrial",
     "investment_restriction": "control",
+    "domestic_regulation": "domestic",     # 국내 규제와 선거발 정책 전환은 같은 계열 (pool 층에서 서로 보충)
+    "election_shift": "domestic",
 }
 AGGRESSIVE = {"announce", "escalate", "enforce", "retaliate"}
 

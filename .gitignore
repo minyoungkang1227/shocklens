@@ -25,3 +25,6 @@ Thumbs.db
 
 # Streamlit 비밀값
 .streamlit/secrets.toml
+
+# 데일리 워치 보고서 (매일 생성)
+data/daily/

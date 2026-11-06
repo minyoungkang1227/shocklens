@@ -3,15 +3,16 @@
 # high / mid 만 적고, 적지 않은 조합은 none 으로 본다.
 # 등급 근거(ETF 구성 비중 등)는 확정 전. 열린 결정 항목.
 
-us_equity:     {countries: {US: high},  sectors: {semiconductor: mid, defense: mid}}
+us_equity:     {countries: {US: high},  sectors: {semiconductor: mid, defense: mid, tech_platform: mid, ai_infra: mid}}
 eu_equity:     {countries: {EU: high},  sectors: {autos: mid, industrials: mid}}
 jp_equity:     {countries: {JP: high},  sectors: {autos: mid, industrials: mid}}
-cn_equity:     {countries: {CN: high},  sectors: {}}
-tw_equity:     {countries: {TW: high},  sectors: {semiconductor: high}}
+cn_equity:     {countries: {CN: high},  sectors: {tech_platform: high}}
+tw_equity:     {countries: {TW: high},  sectors: {semiconductor: high, ai_infra: high}}
 in_equity:     {countries: {IN: high},  sectors: {}}
-semis:         {countries: {US: mid, TW: mid}, sectors: {semiconductor: high}}
+semis:         {countries: {US: mid, TW: mid}, sectors: {semiconductor: high, ai_infra: high}}
 us_treasury:   {countries: {US: mid},   sectors: {}}
 intl_treasury: {countries: {EU: mid, JP: mid}, sectors: {}}
 us_corp:       {countries: {US: mid},   sectors: {}}
-infra_realty:  {countries: {US: mid},   sectors: {energy: mid}}
-listed_pe:     {countries: {US: mid},   sectors: {}}
+infra_realty:  {countries: {US: mid},   sectors: {energy: mid, utilities: high, ai_infra: mid}}
+listed_pe:     {countries: {US: mid},   sectors: {tech_platform: mid}}
+# 2026-11: 국내 정책 사건용 산업 추가 — ai_infra(데이터센터 수요 -> 반도체·대만·인프라), tech_platform, utilities(IGF는 유틸리티 비중 큼)

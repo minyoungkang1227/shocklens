@@ -32,6 +32,8 @@ CONCEPTS: dict[str, tuple[str, float, str]] = {
     "c_blockade": ("instrument", 3.0, r"봉쇄|해협|운하|blockade|strait|chokepoint|canal"),
     "c_subsidy": ("instrument", 3.0, r"보조금|세액 ?공제|subsid|tax credit|CHIPS|인플레이션 ?감축법"),
     "c_invest": ("instrument", 3.0, r"투자 ?제한|해외 ?투자|outbound investment|investment restriction"),
+    "c_domestic_reg": ("instrument", 3.0, r"반독점|antitrust|규제 ?당국|빅테크 ?규제|플랫폼 ?규제|AI ?규제|crackdown|regulator|모라토리엄|moratorium|反垄断|监管"),
+    "c_election": ("instrument", 3.0, r"중간선거|대선|총선|선거|election|midterm|选举"),
     "c_chip_rule": ("instrument", 3.0, r"첨단 ?(칩|반도체)|반도체 ?장비|advanced (chip|computing)|chipmaking equipment"),
     # 산업
     "s_semis": ("sector", 2.0, r"반도체|칩|chip|semiconductor|파운드리|foundry"),
@@ -42,6 +44,8 @@ CONCEPTS: dict[str, tuple[str, float, str]] = {
     "s_telecom": ("sector", 2.0, r"통신|화웨이|huawei|5G"),
     "s_agri": ("sector", 2.0, r"농산물|대두|soybean|agricultur"),
     "s_battery": ("sector", 2.0, r"배터리|리튬|battery|lithium"),
+    "s_platform": ("sector", 2.0, r"플랫폼|빅테크|인터넷|클라우드|platform|big tech|internet|cloud|알리바바|텐센트|Alibaba|Tencent"),
+    "s_ai_infra": ("sector", 2.0, r"데이터 ?센터|AI ?인프라|data ?cent(?:er|re)|hyperscal|AI infrastructure"),
     # 국가
     "k_US": ("country", 1.5, r"미국|백악관|트럼프|바이든|상무부 BIS|USTR|U\.S\.|United States|Washington"),
     "k_CN": ("country", 1.5, r"중국|베이징|China|Beijing|Chinese"),
@@ -56,6 +60,8 @@ CONCEPTS: dict[str, tuple[str, float, str]] = {
 ESCALATE = r"인상|확대|금지|보복|강화|위협|부과|발동|중단|추가 ?조치|맞대응|escalat|retaliat|impose|raise|ban|threat|tighten"
 EASE = r"유예|인하|철회|합의|완화|휴전|해제|면제|pause|truce|rollback|lift|eas(?:e|ing)|deal|exempt"
 EASE_ENDED = r"(유예|휴전|면제|truce|pause)[^.]{0,8}(종료|만료|끝|철회|expire|end)"   # '유예 종료' = 확대 신호
+# '건설 유예', '신규 승인 중단', 'moratorium on data centers' 는 규제 강화(확대) 신호
+EASE_ENDED += r"|(건설|신규|승인|허가)[^.]{0,6}(유예|중단|모라토리엄)|moratorium|(pause|halt)[^.]{0,10}(construction|permits?|new data)"
 GENERIC_W = 0.3
 
 

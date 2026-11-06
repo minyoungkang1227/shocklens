@@ -23,7 +23,7 @@ import statistics
 
 from . import injection, prompts
 from .llm import LLM
-from .state import (COUNTRIES, FACTORS, INSTRUMENTS, SECTORS, STAGES, Event, default_channels)
+from .state import (COUNTRIES, DOMESTIC_INSTRUMENTS, FACTORS, INSTRUMENTS, SECTORS, STAGES, Event, default_channels)
 
 REQUIRED = ["instrument", "initiator", "target"]
 
@@ -42,6 +42,10 @@ def numbered(sentences: list[dict]) -> str:
 KW_INSTRUMENT = [   # 위에서부터 먼저 걸리는 것 (구체적인 수단 먼저)
     ("chokepoint_disruption", r"해협 ?봉쇄|봉쇄|해상 ?봉쇄|운하|항로 ?차단|blockade|strait|chokepoint|canal|封锁|海峡"),
     ("investment_restriction", r"해외 ?투자 ?(제한|심사|금지)|투자 ?제한|outbound investment|investment (ban|restriction|screening)|CFIUS|对外投资"),
+    # 국내 규제: '수출 규제'와 헷갈리지 않게 대상(반독점·데이터센터·플랫폼·AI)이 붙은 표현만
+    ("domestic_regulation", r"반독점|독점 ?금지|antitrust|데이터 ?센터[^.]{0,25}(규제|유예|중단|제한|모라토리엄|반대)|"
+                            r"(AI|인공지능|플랫폼|빅테크)[^.]{0,10}(규제|단속)|moratorium|data ?cent(er|re)s?[^.]{0,30}(regulat|curb|ban|pause|restrict)|"
+                            r"(AI|tech|platform) (regulation|crackdown)|crackdown|反垄断|监管|整顿"),
     ("industrial_subsidy", r"보조금|세액 ?공제|인플레이션 ?감축법|반도체법|CHIPS|IRA(?![A-Za-z])|subsid|tax credit|현지화|local content|补贴"),
     ("financial_sanction", r"SWIFT|자산 ?동결|금융제재|외환보유액|sanction|freeze|制裁|冻结"),
     ("entity_list", r"엔티티 ?리스트|entity list|거래 ?제한 ?명단|实体清单|不可靠实体"),
@@ -50,14 +54,16 @@ KW_INSTRUMENT = [   # 위에서부터 먼저 걸리는 것 (구체적인 수단 
     ("tech_export_control", r"반도체[^.]{0,20}(수출|통제)|수출통제|export control|칩 ?통제|出口管制|芯片"),
     ("currency", r"위안화|환율조작|절하|devalu|currency manipulator|汇率|贬值"),
     ("tariff", r"관세|tariff|301조|关税|加征"),
+    ("election_shift", r"중간선거|대선|총선|선거 ?결과|정권 ?교체|election|midterm|选举|大选"),
 ]
 KW_COUNTRY = {
-    "US": r"미국|미 정부|백악관|트럼프|바이든|상무부 BIS|BIS|USTR|U\.S\.|United States|Washington|美国|美方",
+    "US": r"미국|미 정부|백악관|트럼프|바이든|상무부 BIS|BIS|USTR|U\.S\.|United States|Washington|美国|美方|"
+          r"美(?!元)|(?<![가-힣])미 (?=[가-힣])|뉴욕증시|월가|나스닥|연준|Wall Street|Nasdaq|Dow(?![a-z])|Congress|Senate|Democrats|Republicans",
     "CN": r"중국|베이징|시진핑|China|Beijing|中国|中方|商务部",
     "EU": r"유럽|(?<![A-Za-z])EU(?![A-Za-z])|European",
     "JP": r"일본|Japan|日本",
     "TW": r"대만|Taiwan|TSMC|台湾",
-    "KR": r"한국|Korea",
+    "KR": r"한국|Korea|코스피|코스닥|KOSPI",
     "RU": r"러시아|Russia|俄罗斯",
     "IN": r"인도(?!네시아)|India",
 }
@@ -72,6 +78,9 @@ KW_SECTOR = {
     "critical_minerals": r"희토류|광물|갈륨|게르마늄|rare earth|mineral",
     "battery": r"배터리|리튬|흑연|battery|lithium",
     "industrials": r"기계|산업재|철강|알루미늄|steel|aluminum|machinery",
+    "tech_platform": r"기술주|tech (stocks|shares)|플랫폼|빅테크|인터넷|클라우드|소프트웨어|platform|big tech|internet|cloud|software|알리바바|텐센트|Alibaba|Tencent|平台|互联网",
+    "ai_infra": r"데이터 ?센터|AI ?인프라|인공지능 ?인프라|하이퍼스케일|data ?cent(er|re)|AI infrastructure|hyperscal|코어위브|CoreWeave|数据中心",
+    "utilities": r"전력|전기 ?요금|유틸리티|송전|utilit|power grid|electricity",
 }
 KW_STAGE = [
     ("ease", r"유예|인하|합의|완화|철회|pause|truce"),
@@ -120,6 +129,8 @@ def rule_extract(sentences: list[dict]) -> dict:
             tg = [c for c in order if c != initiators[0] and c not in co_initiators][:2]
         if co_initiators:
             ev.setdefault("notes", []).append(f"공동 발동국으로 보이는 국가: {co_initiators}")
+        if ev.get("instrument") in DOMESTIC_INSTRUMENTS:
+            tg = [initiators[0]]                       # 국내 정책: 자국 산업이 대상
         ev["target"] = tg[:3]
         ev["evidence"]["target"] = sum((hits[c][:1] for c in ev["target"]), [])
     ev["sectors"] = [s for s, p in KW_SECTOR.items() if re.search(p, text, re.I)]
@@ -208,9 +219,16 @@ def guard(draft: dict, sentences: list[dict], raw_text: str,
         d.pop("initiator", None)
     else:
         d["initiator"] = init
-    tgt = [str(c).upper() for c in d.get("target", []) if str(c).upper() in COUNTRIES and str(c).upper() != init]
+    domestic = d.get("instrument") in DOMESTIC_INSTRUMENTS
+    tgt = [str(c).upper() for c in d.get("target", [])
+           if str(c).upper() in COUNTRIES and (domestic or str(c).upper() != init)]
     if len(tgt) != len(d.get("target", [])):
         notes.append("어휘 밖이거나 발동국과 같은 대상국 제거")
+    if domestic and not tgt and init in COUNTRIES:
+        tgt = [init]                                   # 국내 정책 사건은 자국 산업이 대상
+        notes.append(f"국내 정책 사건이라 대상국을 발동국({init})으로 채움")
+        if "initiator" in (d.get("evidence") or {}):
+            d["evidence"]["target"] = list(d["evidence"]["initiator"])
     d["target"] = tgt
     secs = [s for s in d.get("sectors", []) if s in SECTORS]
     if len(secs) != len(d.get("sectors", [])):

@@ -12,13 +12,17 @@ from pydantic import BaseModel, Field, field_validator
 # ---------------------------------------------------------------- 어휘 (사건 라이브러리와 같은 값만 허용)
 INSTRUMENTS = ["tariff", "tariff_pause", "tech_export_control", "entity_list",
                "resource_export_control", "currency", "financial_sanction",
-               "chokepoint_disruption", "industrial_subsidy", "investment_restriction"]
+               "chokepoint_disruption", "industrial_subsidy", "investment_restriction",
+               "domestic_regulation", "election_shift"]
+# 국내 정책 사건: 발동국이 자국 산업을 겨냥한다(발동국 = 대상국 허용). 2026-11 중간선거 후 AI 데이터센터 규제 우려 같은 경우.
+DOMESTIC_INSTRUMENTS = {"domestic_regulation", "election_shift"}
 STAGES = ["announce", "escalate", "enforce", "retaliate", "ease"]
 DIRECTIONS = ["escalate", "ease"]
 FACTORS = ["risk_off", "dollar", "cny", "oil", "ust10y", "credit", "tech_war"]
 COUNTRIES = ["US", "CN", "EU", "JP", "TW", "KR", "IN", "RU", "VN", "MX", "CA", "GB", "SA", "IR", "GLOBAL"]
 SECTORS = ["semiconductor", "telecom", "defense", "autos", "industrials", "energy", "banks",
-           "agriculture", "battery", "critical_minerals", "pharma", "shipping"]
+           "agriculture", "battery", "critical_minerals", "pharma", "shipping",
+           "tech_platform", "ai_infra", "utilities"]
 
 # 수단별 기본 영향 채널 (확대 기준). 완화 사건은 부호를 뒤집는다.
 # Event Analyst가 채널을 못 정하거나 어휘 밖 값을 내면 이 표로 채운다.
@@ -33,6 +37,8 @@ CHANNEL_DEFAULTS: dict[str, dict[str, int]] = {
     "chokepoint_disruption": {"risk_off": 1, "oil": 1, "tech_war": -1, "credit": -1},   # 해협·운하 봉쇄, 공급 차단
     "industrial_subsidy": {"tech_war": 1, "cny": 1},              # 보조금·세액공제·현지화 (자국 산업 지원 + 상대국 배제)
     "investment_restriction": {"tech_war": -1, "risk_off": 1, "cny": 1},   # 해외투자·인수 제한
+    "domestic_regulation": {"tech_war": -1, "risk_off": 1},       # 자국 산업 규제·반독점·인프라 건설 제한
+    "election_shift": {"risk_off": 1},                            # 선거·정권 교체로 정책 기대가 바뀜 (방향은 사건마다)
 }
 
 

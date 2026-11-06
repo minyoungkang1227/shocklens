@@ -132,6 +132,17 @@ python -m agents.run --event cn_ree_oct_2025 --chat             # 후속 질문 
 
 `.env`에 `LLM_API_KEY`가 있으면 Event Analyst(뉴스 해석)와 Reporter(브리핑 문장)가 LLM으로 동작하고, 없으면 키워드 규칙·고정 템플릿으로 동작합니다. 숫자는 어느 경우든 코드가 계산하고, Verifier가 브리핑의 모든 숫자·근거 태그를 계산 장부와 대조해 통과하지 못하면 담당 에이전트로 되돌립니다(최대 2회, 이후 "판단 보류"). 에이전트별 설계는 [docs/agents.md](docs/agents.md)에 있습니다.
 
+### 5-1) 데일리 워치 (매일 국내·미국 핫토픽과 파급효과)
+
+```bash
+python -m agents.daily_watch --refresh          # 데이터 갱신 -> 국내·미국 RSS 수집 -> 토픽 선택 -> 정책 사건은 전체 분석
+python -m agents.daily_watch --regions US --analyze 2
+python -m agents.daily_watch --force            # 정책 사건이 아닌 토픽도 정량 분석 (참고용)
+powershell -ExecutionPolicy Bypass -File scripts\register_daily_watch.ps1 -Time 07:40   # 매일 아침 자동 실행 등록
+```
+
+지역별 RSS 피드(`config/daily_watch.yaml`)에서 헤드라인을 모아 가장 많이 다뤄진 토픽 3개를 고릅니다. LLM이 있으면 토픽 묶기·정책 사건 판단·정성 파급 경로를 LLM이, 없으면 문장 유사도 규칙이 맡습니다. 정책 사건(지경학 + 국내 규제·선거)인 토픽은 ShockLens 전체 흐름으로 ES·사건 효과·3거래일 예측구간·손실 기여를 계산하고, 결과는 `data/daily/YYYY-MM-DD.md`(같은 날 다시 돌리면 `_v2`)와 `.json`에 저장됩니다.
+
 ### 6) 데이터 사본 (선택)
 
 ```bash
