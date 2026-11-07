@@ -230,6 +230,15 @@ ShockLens의 핵심은 '사건 하나 → 단기 꼬리 손실'이고, 아래 �
 
 **데일리 워치 (`agents/daily_watch.py`):** RSS 수집(지역별, 막힌 피드는 기록 후 계속) → 토픽 선택(LLM: 헤드라인 번호로 묶고 정책 사건 여부·정성 파급 경로, 목록 밖 번호와 문장 속 숫자는 코드가 제거 / 규칙: 문장 유사도 묶음, 매체 수·기사 수 순위) → 정책 사건 토픽만 `hq.run_news`(대표 기사 본문, 실패하면 헤드라인 묶음) → 마크다운·JSON 저장(같은 날 `_v2`). 가격 데이터가 영업일 4일 이상 묵으면 국면 판단이 낡았다고 경고한다. Windows 작업 스케줄러 등록 스크립트 `scripts/register_daily_watch.ps1`.
 
+## 4-6. 실전 성적표 (`agents/track_record.py`, 2026-11-07)
+
+백테스트는 라이브러리 사건을 하나씩 빼고 맞히는 방식이라 표본이 작고, 사건을 결과를 알고 고른 한계가 있다. 그래서 실제로 낸 예측을 그대로 채점한다.
+- 기록: 데일리 워치(자동)나 `--add`(수동)로 분석한 사건의 3거래일 시나리오(mild/central/severe), 예측구간, 바스켓별 중앙 충격, 데이터 기준일을 `data/forecasts/forecasts.jsonl`에 추가만 한다. 판단 보류·skipped는 기록하지 않는다.
+- 반응 창: 뉴스 날짜(미국 동부, 데일리 워치는 토픽 헤드라인의 가장 이른 발행 시각) 이후 첫 거래일부터 3거래일.
+- 순수 예측 vs 사후 해석: 기록 시점에 반응 창 첫날 장이 이미 열렸으면 사후 해석. 아침 07:40 KST 실행은 전날 미국 장 마감 후라 미국 뉴스는 대부분 사후 해석이 된다 → 성적은 두 줄로 따로 보고.
+- 채점: backtest와 같은 지표(방향, 범위, 예측구간 적중·폭, severe 커버, 절대오차) + 예측 중앙 충격이 가장 큰 바스켓이 실제 최대 손실 바스켓이었나.
+- 첫 기록: 2026-11-05 중간선거 데이터센터 규제(10/30 데이터 기준, 사후 해석) — 중앙 −0.25%, 최악 −0.42%, 예측구간 −1.54%~+1.02%. 11/9 장 마감 후 데이터 갱신 시 채점.
+
 ## 5. 구현 위치
 
-`agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · 테스트 `tests/test_domestic_daily.py`
+`agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · 테스트 `tests/test_domestic_daily.py`

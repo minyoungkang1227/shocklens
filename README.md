@@ -143,6 +143,16 @@ powershell -ExecutionPolicy Bypass -File scripts\register_daily_watch.ps1 -Time 
 
 지역별 RSS 피드(`config/daily_watch.yaml`)에서 헤드라인을 모아 가장 많이 다뤄진 토픽 3개를 고릅니다. LLM이 있으면 토픽 묶기·정책 사건 판단·정성 파급 경로를 LLM이, 없으면 문장 유사도 규칙이 맡습니다. 정책 사건(지경학 + 국내 규제·선거)인 토픽은 ShockLens 전체 흐름으로 ES·사건 효과·3거래일 예측구간·손실 기여를 계산하고, 결과는 `data/daily/YYYY-MM-DD.md`(같은 날 다시 돌리면 `_v2`)와 `.json`에 저장됩니다.
 
+### 5-2) 실전 성적표 (예측 기록 → 3거래일 뒤 자동 채점)
+
+```bash
+python -m agents.track_record                    # 반응 창이 끝난 예측을 채점하고 성적표 출력
+python -m agents.track_record --add "뉴스" --news-date 2026-11-05   # 뉴스 하나를 예측으로 기록
+python -m agents.track_record --list
+```
+
+데일리 워치가 분석한 토픽은 자동으로 `data/forecasts/forecasts.jsonl`에 기록되고(추가만, 수정 없음), 가격 데이터에 반응 창 3거래일이 들어오면 실제 포트폴리오 수익률로 채점됩니다(`scored.csv`). 기록 시점에 반응 창 첫날 장이 이미 열렸으면 '사후 해석'으로 따로 집계하고, 모델 실력은 '순수 예측'으로 봅니다. 데일리 워치 보고서 끝에 성적표가 붙습니다.
+
 ### 6) 데이터 사본 (선택)
 
 ```bash

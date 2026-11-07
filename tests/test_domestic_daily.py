@@ -119,6 +119,7 @@ def test_llm_topics_drop_unknown_ids_and_numbers():
 
 def test_daily_watch_report_end_to_end(ctx, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
     rep = dw.run(cfg=_cfg(), ctx=ctx, llm=NoLLM(), fetcher=lambda u: FEEDS[u], today=dt.date(2026, 11, 6))
     t0 = rep["regions"][0]["topics"][0]
     assert t0["analysis"]["status"] == "ok" and t0["analysis"]["calc_log_id"]
@@ -128,6 +129,8 @@ def test_daily_watch_report_end_to_end(ctx, tmp_path, monkeypatch):
     assert rep["path"].endswith("2026-11-06.md")
     rep2 = dw.run(cfg=_cfg(), ctx=ctx, llm=NoLLM(), fetcher=lambda u: FEEDS[u], today=dt.date(2026, 11, 6))
     assert rep2["path"].endswith("2026-11-06_v2.md")       # 덮어쓰지 않는다
+    assert t0["analysis"]["forecast"] and "실전 성적표" in md
+    assert (tmp_path / "data" / "forecasts" / "forecasts.jsonl").exists()
 
 
 def test_staleness_note():

@@ -212,12 +212,32 @@ def summarize_state(st: dict) -> dict:
             "triage": st.get("triage"), "data_version": st.get("data_version")}
 
 
-def analyze(topic: dict, heads: list[dict], ctx, llm: LLM, cfg: dict, force: bool = False, fetcher=None) -> dict:
-    from . import hq
+def news_date_et(topic: dict, heads: list[dict]) -> dt.date | None:
+    """토픽 헤드라인 중 가장 이른 발행 시각(미국 동부 기준 날짜). 반응 창 시작일 계산에 쓴다."""
+    from email.utils import parsedate_to_datetime
+    from .track_record import ET
+    ids, ds = set(topic["headline_ids"]), []
+    for h in heads:
+        if h["id"] in ids and h.get("published"):
+            try:
+                d = parsedate_to_datetime(h["published"])
+                ds.append((d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)).astimezone(ET).date())
+            except (TypeError, ValueError):
+                continue
+    return min(ds) if ds else None
+
+
+def analyze(topic: dict, heads: list[dict], ctx, llm: LLM, cfg: dict, force: bool = False, fetcher=None,
+            record: bool = True, now: dt.datetime | None = None) -> dict:
+    from . import hq, track_record
     text, meta = topic_text(topic, heads, cfg.get("fetch_article", True), fetcher)
     st = hq.run_news(text, ctx, llm, force=force or topic.get("policy_event", False))
     out = summarize_state(st)
     out["input"] = meta
+    if record:                                      # 실전 성적표: 예측을 기록해 두고 3거래일 뒤 자동 채점
+        rec = track_record.make_record(st, "daily_watch", news_date_et(topic, heads), now, topic["title"])
+        out["forecast"] = {k: rec[k] for k in ("window_start", "pure")} if rec else None
+        track_record.append(rec)
     return out
 
 
@@ -275,9 +295,14 @@ def render(report: dict, labels: dict) -> str:
             if f.get("TOP1"):
                 L.append(f"- 꼬리손실 기여: {f['TOP1']} {f.get('TOP1_SHARE')}, {f.get('TOP2')} {f.get('TOP2_SHARE')}, "
                          f"{f.get('TOP3')} {f.get('TOP3_SHARE')}")
+            fc = a.get("forecast")
+            if fc:
+                L.append(f"- 성적표 기록: 반응 창 {fc['window_start']}부터 3거래일 "
+                         f"({'순수 예측' if fc['pure'] else '사후 해석: 기록 시점에 이미 장이 열림'}), 창이 끝나면 자동 채점")
             L.append(f"- 근거: {f.get('TIER', a.get('analog_tier'))} {a['analogs']} · 입력 {a['input']['mode']}"
                      + (f" ({a['input']['url']})" if a['input'].get('url') else "") + f" · 계산 기록 {a['calc_log_id']}")
             L += ["", "<details><summary>전체 브리핑</summary>", "", a["brief"], "", "</details>"]
+    L += ["", "## 실전 성적표", "", report.get("track_record_md", "")]
     L += ["", "---", "숫자는 모두 ShockLens Risk Engine 계산 결과(계산 기록 번호로 재현 가능)이며, 파급 경로 문장은 LLM의 정성 설명입니다. "
           "투자 권유가 아닙니다."]
     return "\n".join(L)
@@ -307,7 +332,7 @@ def staleness(data_version: str, today: dt.date, max_days: int) -> str | None:
 
 def run(regions: list[str] | None = None, analyze_n: int | None = None, force: bool = False, refresh: bool = False,
         cfg: dict | None = None, ctx=None, llm: LLM | None = None, fetcher=None, article_fetcher=None,
-        today: dt.date | None = None, save: bool = True) -> dict:
+        today: dt.date | None = None, save: bool = True, now: dt.datetime | None = None) -> dict:
     cfg = cfg or load_cfg()
     if refresh:
         from pipeline import run_all
@@ -318,9 +343,13 @@ def run(regions: list[str] | None = None, analyze_n: int | None = None, force: b
     llm = llm or LLM()
     today = today or dt.date.today()
     n_top, n_an = cfg.get("topics_per_region", 3), cfg.get("analyze_per_region", 1) if analyze_n is None else analyze_n
+    from . import track_record
+    scored = track_record.score_all(ctx)                # 지난 예측 중 반응 창이 끝난 것을 먼저 채점
+    record_md = track_record.report_md(scored, len(track_record.load()) - len(scored))
     report = {"date": today.isoformat(), "generated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
               "data_version": ctx.data_version, "topic_mode": "llm" if llm.enabled else "rule", "regions": [],
-              "stale_note": staleness(ctx.data_version, today, cfg.get("stale_data_days", 4))}
+              "stale_note": staleness(ctx.data_version, today, cfg.get("stale_data_days", 4)),
+              "track_record_md": record_md}
     for code in (regions or list(cfg["regions"])):
         rc = cfg["regions"][code]
         heads, errs = collect(rc, cfg.get("max_headlines_per_feed", 40), fetcher=fetcher)
@@ -334,7 +363,7 @@ def run(regions: list[str] | None = None, analyze_n: int | None = None, force: b
                 t["skip_reason"] = "정책 사건이 아님 (지경학·국내 정책 사건만 정량 분석)"
                 continue
             print(f"[daily_watch] {rc['label']} 분석: {t['title']}")
-            t["analysis"] = analyze(t, heads, ctx, llm, cfg, force, article_fetcher)
+            t["analysis"] = analyze(t, heads, ctx, llm, cfg, force, article_fetcher, now=now)
             done += 1
         report["regions"].append({"code": code, "label": rc["label"], "n_headlines": len(heads),
                                   "feed_errors": errs, "topics": topics,
