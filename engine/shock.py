@@ -106,6 +106,67 @@ def from_analogs_weighted(event_factor_post: pd.DataFrame, weights: dict[str, fl
     return out
 
 
+def borrow_channels(event: dict, analog_ids: list[str], analog_weights: dict[str, float], library: list[dict],
+                    f_filtered: pd.DataFrame, shock_tbl: pd.DataFrame, cfg: dict
+                    ) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+    """산업 기준 채널 차용 (2026-11-09).
+
+    문제: 유사 사건이 같은 수단 계열에서 왔지만 이번 사건의 영향 채널 하나를 '갖고 있지 않은' 경우가 있다.
+      예) 미국 중간선거(AI 데이터센터 규제)의 유사 사건은 중국 플랫폼 규제 3건인데, 그 사건들의 채널은
+      위험회피·위안화뿐이라 반도체 상대수익(tech_war) 크기를 잴 근거가 없다. 값이 반대 부호면 0으로 잘려
+      가중 분위수가 0 근처로 쪼그라든다.
+    처방: 유사 사건 중 그 채널을 가진 사건의 가중치 비중이 min_share 미만이면, 수단과 무관하게
+      '산업이 겹치고, 같은 방향이고, 라이브러리 채널에 같은 부호로 그 팩터가 있는' 과거 사건(기증 사건)을
+      weight(기본 0.5) x clean 계수 x 강도 근접도로 더해 그 채널 한 줄만 다시 계산한다.
+    돌려주는 값: (보정된 표, {팩터: [기증 사건 id]})
+    """
+    from . import analog as analog_mod
+    from . import severity as sev
+    out = shock_tbl.copy()
+    used: dict[str, list[str]] = {}
+    sectors = set(event.get("sectors") or [])
+    if not cfg.get("enabled", True) or not sectors:
+        return out, used
+    by_id = {e["id"]: e for e in library}
+    min_share = float(cfg.get("min_share", 0.25))
+    bw = float(cfg.get("weight", 0.5))
+    pw = float(cfg.get("partial_unclean_weight", 0.5))
+    scale = float(cfg.get("closeness_scale", 20))
+    qs = tuple(cfg.get("scenario_quantiles", (0.25, 0.5, 0.9)))
+    p_ev = event.get("severity_points")
+    if p_ev is None:
+        p_ev = sev.score(event.get("severity_components"), None, event.get("severity", 3))
+    ev_date = str(event.get("date") or "9999-12-31")
+    w_an = {i: float(analog_weights.get(i, 1.0)) for i in analog_ids}
+    tot = sum(w_an.values()) or 1.0
+    for f, d in (event.get("channels") or {}).items():
+        if f not in out.index or f not in f_filtered.columns:
+            continue
+        carriers = [i for i in analog_ids if (by_id.get(i, {}).get("channels") or {}).get(f) == d]
+        if sum(w_an[i] for i in carriers) / tot >= min_share:
+            continue
+        donors = {}
+        for e in library:
+            if e["id"] in w_an or e["id"] == event.get("id") or e["id"] not in f_filtered.index:
+                continue
+            if str(e["date"]) >= ev_date or analog_mod.direction(e) != analog_mod.direction(event):
+                continue
+            if (e.get("channels") or {}).get(f) != d or not (sectors & set(e.get("sectors") or [])):
+                continue
+            cf = analog_mod.clean_factor(e, True, pw)
+            if cf is None or pd.isna(f_filtered.loc[e["id"], f]):
+                continue
+            donors[e["id"]] = bw * cf * sev.closeness(p_ev, e.get("severity_points", 50.0), scale)
+        if not donors:
+            continue
+        pool = {**{i: w_an[i] for i in carriers}, **donors}
+        col = f_filtered.loc[list(pool), f] * d
+        for name, q in zip(SCENARIOS, qs):
+            out.loc[f, name] = d * weighted_quantile(col.to_numpy(), list(pool.values()), q)
+        used[f] = sorted(donors, key=lambda i: -donors[i])
+    return out, used
+
+
 def apply_severe_floor(shock: pd.DataFrame, channels: dict[str, int], severity: int, q_up: pd.DataFrame,
                        q_down: pd.DataFrame, quantile_map: dict[int, float], level_offset: int = -1
                        ) -> tuple[pd.DataFrame, list[str]]:

@@ -242,3 +242,11 @@ ShockLens의 핵심은 '사건 하나 → 단기 꼬리 손실'이고, 아래 �
 ## 5. 구현 위치
 
 `agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · 테스트 `tests/test_domestic_daily.py`
+
+## 2026-11-09 업그레이드 (fix28): 산업 기준 채널 차용 + 반도체 정책 사건 3건
+
+- **문제:** 미국 중간선거(AI 데이터센터 규제) 예측에서 반도체 바스켓 중앙 충격이 -1.7%로 실제(반도체지수 11/4 -3.1%, 11/5 -12%대)보다 훨씬 작았다. 국내 정책 계열의 깨끗한 사건이 중국 플랫폼 규제뿐이라 반도체 상대수익(tech_war) 채널을 가진 유사 사건이 없었고, 그 값이 0으로 잘려 반도체 충격이 베타로만 전해졌다.
+- **채널 차용 (`engine/shock.borrow_channels`, 설정 `analog.channel_borrow`):** 유사 사건 중 이번 사건의 채널을 가진 사건의 가중치 비중이 25% 미만이면, 수단과 무관하게 산업이 겹치고 방향·채널 부호가 같은 과거 사건을 가중치 0.5 x clean 계수 x 강도 근접도로 더해 그 채널 한 줄만 다시 계산한다. 이미 근거가 있는 채널은 그대로. 경고와 `shock_method`(`+borrow(tech_war)`)로 표시.
+- **가드레일:** 국내 정책 사건(domestic_regulation·election_shift)이 반도체·AI 인프라 대상이면 tech_war 채널을 자동 추가.
+- **사건 3건 추가 (36건):** 2024-07 FDPR 검토 보도(반도체지수 -6.8%), 2025-01 AI 확산 규칙, 2025-04 H20 허가 의무. 셋 다 겹침이 있어 macro(가중 0.5). 보도 시각과 겹침 분류는 데스크탑에서 일별 수익률로 검수.
+- **검증 계획:** `python -m agents.backtest`로 차용 켜기/끄기(`channel_borrow.enabled`) 비교, `us_midterm_2026` 블라인드 재예측.
