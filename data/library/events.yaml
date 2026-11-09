@@ -722,3 +722,32 @@ events:
     confounders: [11/8 FOMC(동결, 반응 창 2일째)]
     clean: false
     confounder_type: macro
+
+  # ---------------- 2026 ----------------
+  - id: us_midterm_2026
+    date: "2026-11-03"
+    react_from: "2026-11-04"     # 개표는 장 마감 후. 반응 창 11/4·11/5·11/6
+    title: 미국 중간선거 민주당 상·하원 장악, AI 데이터센터 규제·건설 둔화 우려
+    instrument: election_shift
+    direction: escalate
+    initiator: US
+    target: [US]
+    sectors: [semiconductor, ai_infra]
+    stage: announce
+    # 강도 요소는 초안(사후 채점). 법안은 아직 없어 즉시성 1. relabel_severity로 블라인드 재채점 필요.
+    severity: 3
+    severity_components: {scope: 4, immediacy: 1, substitut: 2, escalation: 2, parties: 3, surprise: 3}
+    channels: {risk_off: 1, tech_war: -1}
+    description: >
+      민주당이 상·하원 다수당을 차지하고 텍사스·조지아 등 데이터센터 밀집 주에서 AI·데이터센터 반대 후보가
+      이기면서 데이터센터 전력 비용·인허가 규제가 강화되고 AI 설비투자가 둔화될 수 있다는 우려가 커짐.
+      첫날은 정치 불확실성 해소와 유가 하락으로 지수가 오르는 가운데 데이터센터 운영사와 반도체만 떨어졌고,
+      이튿날 우려가 반도체 전반으로 번져 지수까지 급락. 2단계 반응(지수 상승 → 반도체발 급락).
+    sources:
+      - https://www.staradvertiser.com/2026/11/04/breaking-news/dow-surges-1575-points-as-democrats-win-control-of-congress/
+      - https://www.aljazeera.com/economy/2026/11/4/us-markets-rise-as-democrats-sweep-midterm-elections
+      - https://finance.yahoo.com/markets/stocks/articles/stock-market-today-nov-6-144816072.html
+      - https://www.stocktitan.net/articles/stock-market-today-live-november-6-2026
+    confounders: [11/6 10월 고용(+16.5만 vs 예상 5.9만)으로 금리 상승, 11/4 이란전 종식 기대 유가 하락(선거와 연결), 11/4 AMD 실적]
+    clean: false
+    confounder_type: macro
