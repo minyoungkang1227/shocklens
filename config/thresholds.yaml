@@ -24,6 +24,10 @@ analog:
   severe_floor_level_offset: -1   # 기준 = 강도 한 단계 아래의 분위수
   closeness_scale: 20    # 강도 점수(0~100) 차이가 이 값일 때 가중치 0.5, 같으면 1 (부드러운 등급 가중)
   clip_wrong_sign: true  # 영향 채널이 기대와 반대로 움직인 값은 0으로 (사건이 포트폴리오를 돕는 경우 제외)
+  channel_borrow:        # (2026-11-09) 유사 사건에 이번 사건의 채널이 없으면 산업이 겹치는 다른 수단 사건에서 그 채널만 빌림
+    enabled: true
+    min_share: 0.25      # 그 채널을 가진 유사 사건의 가중치 비중이 이 미만이면 차용
+    weight: 0.5          # 기증 사건 가중치 배율 (x clean 계수 x 강도 근접도)
 
 event_window:
   pre_days: 5

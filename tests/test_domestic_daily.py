@@ -139,3 +139,49 @@ def test_daily_watch_report_end_to_end(ctx, tmp_path, monkeypatch):
 def test_staleness_note():
     assert dw.staleness("2026-10-30", dt.date(2026, 11, 6), 4)
     assert dw.staleness("2026-11-05", dt.date(2026, 11, 6), 4) is None
+
+
+# ------------------------------------------------------------------ 2026-11-09: 채널 차용·국내 사건 반도체 채널
+def test_guard_adds_tech_war_for_domestic_semis_event():
+    sents = event_analyst.split_sentences(DC_NEWS)
+    ids = [x["id"] for x in sents]
+    draft = {"instrument": "election_shift", "direction": "escalate", "initiator": "US", "target": ["US"],
+             "sectors": ["semiconductor", "ai_infra"], "stage": "announce", "severity": 3,
+             "channels": {"risk_off": 1}, "evidence": {"instrument": ids[:1], "initiator": ids[:1], "target": ids[:1]}}
+    ev, errors = event_analyst.guard(draft, sents, DC_NEWS)
+    assert ev is not None and ev.channels == {"risk_off": 1, "tech_war": -1}
+    draft2 = {**draft, "sectors": ["tech_platform"]}                   # 반도체·AI 인프라가 아니면 붙이지 않음
+    ev2, _ = event_analyst.guard(draft2, sents, DC_NEWS)
+    assert ev2.channels == {"risk_off": 1}
+
+
+def test_borrow_channels_fills_missing_semis_channel():
+    import pandas as pd
+    from engine import shock
+    lib = [
+        {"id": "cn_a", "date": "2021-01-01", "instrument": "domestic_regulation", "sectors": ["tech_platform"],
+         "channels": {"risk_off": 1, "cny": 1}, "clean": True, "severity_points": 50.0},
+        {"id": "cn_b", "date": "2021-02-01", "instrument": "domestic_regulation", "sectors": ["tech_platform"],
+         "channels": {"risk_off": 1, "cny": 1}, "clean": True, "severity_points": 50.0},
+        {"id": "chip_x", "date": "2022-10-07", "instrument": "tech_export_control", "sectors": ["semiconductor"],
+         "channels": {"tech_war": -1, "risk_off": 1}, "clean": True, "severity_points": 50.0},
+        {"id": "chip_y", "date": "2023-10-17", "instrument": "tech_export_control", "sectors": ["semiconductor"],
+         "channels": {"tech_war": -1, "risk_off": 1}, "clean": False, "confounder_type": "macro",
+         "severity_points": 50.0},
+        {"id": "chip_future", "date": "2030-01-01", "instrument": "tech_export_control", "sectors": ["semiconductor"],
+         "channels": {"tech_war": -1}, "clean": True, "severity_points": 50.0},
+        {"id": "chip_ease", "date": "2022-01-01", "instrument": "tariff_pause", "direction": "ease",
+         "sectors": ["semiconductor"], "channels": {"tech_war": -1}, "clean": True, "severity_points": 50.0},
+    ]
+    F = pd.DataFrame({"risk_off": [2.0, 1.0, 3.0, 2.0, 9.0, 1.0], "tech_war": [0.0, 0.0, -0.05, -0.03, -0.5, -0.4],
+                      "cny": [0.01, 0.01, 0, 0, 0, 0]}, index=[e["id"] for e in lib])
+    ev = {"id": "new", "date": "2026-11-03", "direction": "escalate", "sectors": ["semiconductor", "ai_infra"],
+          "channels": {"risk_off": 1, "tech_war": -1}, "severity": 3}
+    base = shock.from_analogs_weighted(F, {"cn_a": 1, "cn_b": 1}, ev["channels"])
+    assert base.loc["tech_war"].abs().max() == 0                       # 차용 전: 반도체 채널 0
+    out, used = shock.borrow_channels(ev, ["cn_a", "cn_b"], {"cn_a": 1, "cn_b": 1}, lib, F, base, {"weight": 0.5})
+    assert used == {"tech_war": ["chip_x", "chip_y"]}                  # 미래·반대 방향 사건은 기증하지 않음
+    assert out.loc["tech_war", "severe"] < out.loc["tech_war", "central"] < 0
+    assert (out.loc["risk_off"] == base.loc["risk_off"]).all()         # 이미 근거가 있는 채널은 그대로
+    off, used0 = shock.borrow_channels(ev, ["cn_a", "cn_b"], {"cn_a": 1, "cn_b": 1}, lib, F, base, {"enabled": False})
+    assert used0 == {} and off.equals(base)

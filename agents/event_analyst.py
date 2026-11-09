@@ -292,6 +292,12 @@ def guard(draft: dict, sentences: list[dict], raw_text: str,
         if ch.get("risk_off", want) != want:
             notes.append(f"방향({d['direction']})과 risk_off 부호 모순 -> {want:+d} 로 보정")
             ch["risk_off"] = want
+        # (2026-11-09) 국내 정책 사건이 반도체·AI 인프라를 겨냥하면 반도체 상대수익 경로를 붙인다.
+        # 기본 채널표(election_shift = 위험회피만)로 채워지거나 모델이 놓쳐도 반도체 충격이 베타로만 전해지는 것을 막는다.
+        if (d["instrument"] in DOMESTIC_INSTRUMENTS and "tech_war" not in ch
+                and set(d.get("sectors") or []) & {"semiconductor", "ai_infra"}):
+            ch["tech_war"] = -want
+            notes.append(f"국내 정책 사건이 반도체·AI 인프라 대상 -> 반도체 상대수익 채널 {-want:+d} 추가")
         d["channels"] = ch
 
     # 4. 동시발생 충격

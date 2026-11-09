@@ -39,7 +39,7 @@ def map_shock(event: dict, analog_ids: list[str], tier: str, exposure: dict, ctx
                                 th["severity"]["crisis_regime_min"], asof)
     regime = reg["regime"]
     beta = ctx.beta_crisis if regime == "crisis" else ctx.beta_normal
-    warnings, flipped = [], []
+    warnings, flipped, borrowed = [], [], {}
 
     acfg = th["analog"]
     method = "synthetic"
@@ -58,6 +58,16 @@ def map_shock(event: dict, analog_ids: list[str], tier: str, exposure: dict, ctx
                 warnings.append("유사 사건이 1건뿐이라 사건 실측만으로는 범위를 잡을 수 없습니다.")
         if flipped:
             warnings.append(f"유사 사건에서 기대와 반대로 움직인 값 {len(flipped)}개를 0으로 처리했습니다.")
+        bcfg = {"partial_unclean_weight": acfg.get("partial_unclean_weight", 0.5),
+                "closeness_scale": acfg.get("closeness_scale", 20),
+                "scenario_quantiles": acfg.get("scenario_quantiles", (0.25, 0.5, 0.9)),
+                **(acfg.get("channel_borrow") or {"enabled": False})}
+        ev_for_borrow = {**event, "date": event.get("date") or asof}
+        f_shock, borrowed = shock.borrow_channels(ev_for_borrow, analog_ids, w, ctx.events, F_ch, f_shock, bcfg)
+        for f, ids in borrowed.items():
+            warnings.append(f"유사 사건에 {ctx.labels.get(f, f)} 경로가 없어, 산업이 같은 다른 수단 사건 "
+                            f"{len(ids)}건({', '.join(ids[:4])})의 실측을 낮은 가중치로 빌려 썼습니다.")
+            method += f"+borrow({f})"
     else:
         f_shock = shock.from_severity(event["channels"], event["severity"], ctx.q_up, ctx.q_down,
                                       th["severity"]["quantile_map"], list(F.columns))
@@ -98,6 +108,7 @@ def map_shock(event: dict, analog_ids: list[str], tier: str, exposure: dict, ctx
         "shock_warnings": warnings,
         "zeroed_wrong_sign": flipped,
         "shock_method": method,
+        "channel_borrow": borrowed,
     }
 
 
