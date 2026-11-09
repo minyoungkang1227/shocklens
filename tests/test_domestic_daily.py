@@ -63,6 +63,9 @@ def test_domestic_family_and_library_events():
     for i in ("cn_alibaba_antitrust_2020", "cn_didi_cac_2021", "cn_edu_ban_2021", "us_ga_runoff_2021"):
         assert ev[i]["target"] == [ev[i]["initiator"]]
     assert ev["us_midterm_2018"]["direction"] == "ease"
+    m = ev["us_midterm_2026"]                          # 2026 중간선거: 발표일 11/3, 반응은 11/4부터, 고용지표 겹침
+    assert m["instrument"] == "election_shift" and m["direction"] == "escalate"
+    assert m["react_from"] == "2026-11-04" and m["confounder_type"] == "macro" and not m["clean"]
 
 
 def test_domestic_news_runs_end_to_end(ctx):
