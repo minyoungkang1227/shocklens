@@ -22,7 +22,8 @@ def test_rule_extract_domestic_regulation_targets_own_country():
     out = event_analyst.analyze(DC_NEWS, NoLLM())
     ev = out["event"]
     assert out["event_complete"]
-    assert ev["instrument"] == "domestic_regulation" and ev["initiator"] == "US" and ev["target"] == ["US"]
+    # 선거가 원인이고 규제는 '우려·촉구' 단계 -> election_shift (prompts 정의·us_midterm_2026 라벨과 같은 기준)
+    assert ev["instrument"] == "election_shift" and ev["initiator"] == "US" and ev["target"] == ["US"]
     assert "ai_infra" in ev["sectors"] and ev["direction"] == "escalate"
     assert ev["channels"] == {"tech_war": -1, "risk_off": 1}
 
@@ -70,7 +71,7 @@ def test_domestic_family_and_library_events():
 
 def test_domestic_news_runs_end_to_end(ctx):
     st = run_news(DC_NEWS, ctx, NoLLM())
-    assert st["status"] == "ok" and st["event"]["instrument"] == "domestic_regulation"
+    assert st["status"] == "ok" and st["event"]["instrument"] in ("domestic_regulation", "election_shift")
     assert st["analog_tier"] in ("direct", "relaxed", "pool", "synthetic")
     assert all(FAMILY.get(ctx.event_by_id(a["id"])["instrument"]) == "domestic" for a in st["analogs"]) \
         or st["analog_tier"] == "synthetic"
@@ -185,3 +186,40 @@ def test_borrow_channels_fills_missing_semis_channel():
     assert (out.loc["risk_off"] == base.loc["risk_off"]).all()         # 이미 근거가 있는 채널은 그대로
     off, used0 = shock.borrow_channels(ev, ["cn_a", "cn_b"], {"cn_a": 1, "cn_b": 1}, lib, F, base, {"enabled": False})
     assert used0 == {} and off.equals(base)
+
+
+# ------------------------------------------------------------------ 2026-11-10 판정 점검에서 나온 보정
+ENACTED_NEWS = "미국 의회가 데이터센터 건설 규제 법안을 통과시켰다. 중간선거 이후 민주당이 주도했다."
+KR_MARGIN_NEWS = ("금융당국은 9일부터 내년 1월 31일까지 증권사의 신용융자 담보비율 140% 유지 의무를 한시 면제한다. "
+                  "반대매매로 인한 시장 불안을 줄이기 위한 조치다.")
+
+
+def test_enacted_domestic_regulation_stays_domestic():
+    ev = event_analyst.analyze(ENACTED_NEWS, NoLLM())["event"]
+    assert ev["instrument"] == "domestic_regulation" and ev["direction"] == "escalate"
+
+
+def test_korean_deregulation_is_policy_ease_without_tech_channel():
+    from agents import triage
+    t = triage.rule_triage(KR_MARGIN_NEWS)
+    assert t["relevant"] and t["importance"] >= 2
+    out = event_analyst.analyze(KR_MARGIN_NEWS, NoLLM())
+    ev = out["event"]
+    assert out["event_complete"] and ev["instrument"] == "domestic_regulation"
+    assert ev["initiator"] == "KR" and ev["target"] == ["KR"] and ev["direction"] == "ease"
+    assert "tech_war" not in ev["channels"] and ev["channels"].get("risk_off") == -1
+
+
+def test_market_events_are_not_policy():
+    from agents import triage
+    for text in ("코스피가 미국 반도체주 급등에 5%대 상승하며 매수 사이드카가 발동됐다.",
+                 "엔비디아 이사회가 젠슨 황 CEO에 대한 조사에 착수했다. 주가는 4.2% 하락했다.",
+                 "10월 고용 지표가 강하게 나오면서 12월 금리 인상 확률이 80%를 넘었다."):
+        assert not triage.rule_triage(text)["relevant"]
+
+
+def test_kr_margin_relief_library_event():
+    from pipeline.library import load_events
+    e = {x["id"]: x for x in load_events()}["kr_margin_relief_2026"]
+    assert e["instrument"] == "domestic_regulation" and e["direction"] == "ease" and e["target"] == ["KR"]
+    assert e["confounder_type"] == "other" and not e["clean"]

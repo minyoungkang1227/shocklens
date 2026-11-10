@@ -45,7 +45,9 @@ KW_INSTRUMENT = [   # 위에서부터 먼저 걸리는 것 (구체적인 수단 
     # 국내 규제: '수출 규제'와 헷갈리지 않게 대상(반독점·데이터센터·플랫폼·AI)이 붙은 표현만
     ("domestic_regulation", r"반독점|독점 ?금지|antitrust|데이터 ?센터[^.]{0,25}(규제|유예|중단|제한|모라토리엄|반대)|"
                             r"(AI|인공지능|플랫폼|빅테크)[^.]{0,10}(규제|단속)|moratorium|data ?cent(er|re)s?[^.]{0,30}(regulat|curb|ban|pause|restrict)|"
-                            r"(AI|tech|platform) (regulation|crackdown)|crackdown|反垄断|监管|整顿"),
+                            r"(AI|tech|platform) (regulation|crackdown)|crackdown|反垄断|监管|整顿|"
+                            # 국내 규제 완화·시장 안정 조치 (2026-11-10): 의무 면제·특례·공매도·담보비율
+                            r"규제 ?완화|의무[^.]{0,6}면제|한시 ?(면제|허용|유예)|특례|공매도|담보 ?비율|반대매매|deregulat|waive"),
     ("industrial_subsidy", r"보조금|세액 ?공제|인플레이션 ?감축법|반도체법|CHIPS|IRA(?![A-Za-z])|subsid|tax credit|현지화|local content|补贴"),
     ("financial_sanction", r"SWIFT|자산 ?동결|금융제재|외환보유액|sanction|freeze|制裁|冻结"),
     ("entity_list", r"엔티티 ?리스트|entity list|거래 ?제한 ?명단|实体清单|不可靠实体"),
@@ -56,6 +58,9 @@ KW_INSTRUMENT = [   # 위에서부터 먼저 걸리는 것 (구체적인 수단 
     ("tariff", r"관세|tariff|301조|关税|加征"),
     ("election_shift", r"중간선거|대선|총선|선거 ?결과|정권 ?교체|election|midterm|选举|大选"),
 ]
+# 국내 규제가 실제로 정해진 단계(시행·통과·의결 등)인지. 아니면 선거발 '가능성'으로 본다.
+ENACTED = r"시행|발효|통과|의결|서명|공포|확정|발표했|단행|enact|signed|passed|approv|effective"
+DEREG = r"규제 ?완화|의무[^.]{0,6}면제|한시 ?(면제|허용|유예)|특례|deregulat|waive"
 KW_COUNTRY = {
     "US": r"미국|미 정부|백악관|트럼프|바이든|상무부 BIS|BIS|USTR|U\.S\.|United States|Washington|美国|美方|"
           r"美(?!元)|(?<![가-힣])미 (?=[가-힣])|뉴욕증시|월가|나스닥|연준|Wall Street|Nasdaq|Dow(?![a-z])|Congress|Senate|Democrats|Republicans",
@@ -63,7 +68,7 @@ KW_COUNTRY = {
     "EU": r"유럽|(?<![A-Za-z])EU(?![A-Za-z])|European",
     "JP": r"일본|Japan|日本",
     "TW": r"대만|Taiwan|TSMC|台湾",
-    "KR": r"한국|Korea|코스피|코스닥|KOSPI",
+    "KR": r"한국|Korea|코스피|코스닥|KOSPI|금융위원회|금융위|금융감독원|금감원|금융당국|재정경제부|한국은행",
     "RU": r"러시아|Russia|俄罗斯",
     "IN": r"인도(?!네시아)|India",
 }
@@ -83,7 +88,7 @@ KW_SECTOR = {
     "utilities": r"전력|전기 ?요금|유틸리티|송전|utilit|power grid|electricity",
 }
 KW_STAGE = [
-    ("ease", r"유예|인하|합의|완화|철회|pause|truce"),
+    ("ease", r"유예|인하|합의|완화|철회|면제|특례|pause|truce|waive"),
     ("retaliate", r"보복|맞대응|대응 조치|retaliat"),
     ("enforce", r"시행|발효|즉시|effective|금지"),
     ("escalate", r"추가|확대|인상|강화|escalat"),
@@ -104,7 +109,15 @@ def rule_extract(sentences: list[dict]) -> dict:
         if ids:
             ev["instrument"], ev["evidence"]["instrument"] = inst, ids[:2]
             break
+    # 선거 결과가 원인이고 규제는 '우려·가능성' 단계면 election_shift (prompts의 정의와 같은 기준, 2026-11-10)
+    if ev.get("instrument") == "domestic_regulation":
+        el_ids = _first_sentence_ids(sentences, dict(KW_INSTRUMENT)["election_shift"])
+        dom = " ".join(s["text"] for s in sentences if s["id"] in ev["evidence"]["instrument"])
+        if el_ids and not re.search(ENACTED, dom, re.I):
+            ev["instrument"], ev["evidence"]["instrument"] = "election_shift", el_ids[:2]
     ev["direction"] = "ease" if ev.get("instrument") == "tariff_pause" else "escalate"
+    if ev.get("instrument") == "domestic_regulation" and re.search(DEREG, text, re.I):
+        ev["direction"] = "ease"                        # 국내 규제 완화·안정 조치
     hits = {c: _first_sentence_ids(sentences, p) for c, p in KW_COUNTRY.items()}
     hits = {c: ids for c, ids in hits.items() if ids}
     order = sorted(hits, key=lambda c: (min(int(i[1:]) for i in hits[c]), -len(hits[c])))
@@ -298,6 +311,11 @@ def guard(draft: dict, sentences: list[dict], raw_text: str,
                 and set(d.get("sectors") or []) & {"semiconductor", "ai_infra"}):
             ch["tech_war"] = -want
             notes.append(f"국내 정책 사건이 반도체·AI 인프라 대상 -> 반도체 상대수익 채널 {-want:+d} 추가")
+        # (2026-11-10) 반대로, 기술 산업과 무관한 국내 정책(증시 안정 조치 등)에 기본값 tech_war가 붙으면 뺀다.
+        if (d["instrument"] in DOMESTIC_INSTRUMENTS and "tech_war" in ch and "channels" in unc
+                and not set(d.get("sectors") or []) & {"semiconductor", "ai_infra", "tech_platform"}):
+            ch.pop("tech_war")
+            notes.append("기술 산업과 무관한 국내 정책 사건 -> 기본값 반도체 상대수익 채널 제거")
         d["channels"] = ch
 
     # 4. 동시발생 충격
