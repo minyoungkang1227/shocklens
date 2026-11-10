@@ -819,3 +819,27 @@ events:
     confounders: [11/6 10월 고용(+16.5만 vs 예상 5.9만)으로 금리 상승, 11/4 이란전 종식 기대 유가 하락(선거와 연결), 11/4 AMD 실적]
     clean: false
     confounder_type: macro
+
+  # 2026-11-10 추가: 데일리 브리핑에서 '정책 사건'으로 분류한 국내 조치. 검수 필요(발표 시각·조치 범위는 기사 1~2건만 확인).
+  - id: kr_margin_relief_2026
+    date: "2026-11-06"           # 긴급 시장상황점검회의(11/6) 결정으로 보도. 정확한 발표 시각 미확인
+    react_from: "2026-11-09"     # 시행일(11/9). 미국 ETF 기준 반응 창 11/9·11/10·11/11
+    title: 한국, 증권사 신용융자 담보비율 140% 유지 의무 한시 면제 (반대매매 완화)
+    instrument: domestic_regulation
+    direction: ease
+    initiator: KR
+    target: [KR]
+    sectors: []
+    stage: ease
+    # 강도 요소는 초안(사후 채점). 포트폴리오에 한국 바스켓이 없어 직접 노출은 없음.
+    severity_components: {scope: 2, immediacy: 5, substitut: 1, escalation: 1, parties: 2, surprise: 3}
+    channels: {risk_off: -1}
+    description: >
+      11/5~6 코스피 급락(서킷브레이커)에 대응해 금융당국이 11/9부터 2027년 1/31까지 증권사의 신용융자
+      담보비율 140% 유지 의무를 한시 면제. 일부 증권사는 담보비율을 낮추거나 반대매매를 유예.
+    sources:
+      - https://www.fntimes.com/html/view.php?ud=202611100710183972141825007d_18
+      - https://www.ket.kr/news/article.html?no=41980
+    confounders: [11/9 미국 반도체 급반등(중간선거 급락 되돌림), 11/10 미국 10월 CPI]
+    clean: false
+    confounder_type: other       # 반응 창이 us_midterm_2026 급락의 되돌림 장세와 겹침 -> 충격 산정에서 제외

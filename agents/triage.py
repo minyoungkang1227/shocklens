@@ -29,9 +29,10 @@ importance: 1 무관하거나 소문·논평 / 2 작은 조치(기업 몇 곳·�
 
 POLICY = r"봉쇄|blockade|封锁|보조금|subsid|补贴|투자 ?제한|outbound investment|관세|tariff|关税|수출 ?통제|export control|出口管制|엔티티|entity list|实体清单|희토류|rare earth|稀土|" \
          r"제재|sanction|制裁|SWIFT|환율조작|devalu|汇率|수출 ?금지|export ban|보복|retaliat|反制|유예|pause|truce|" \
-         r"반독점|antitrust|反垄断|규제|regulat|crackdown|监管|모라토리엄|moratorium|중간선거|대선|election|midterm|选举"
+         r"반독점|antitrust|反垄断|규제|regulat|crackdown|监管|모라토리엄|moratorium|중간선거|대선|election|midterm|选举|" \
+         r"의무[^.]{0,6}면제|한시 ?(면제|허용)|특례|공매도|담보 ?비율|deregulat|waive"
 BIG = r"전면|모든|전체|all |全面|즉시|immediately|立即|보복|retaliat|反制"
-COUNTRY = r"미국|중국|러시아|대만|일본|EU|유럽|U\.S\.|United States|China|Russia|Taiwan|Japan|美国|中国|俄罗斯"
+COUNTRY = r"미국|중국|러시아|대만|일본|한국|금융당국|EU|유럽|U\.S\.|United States|China|Russia|Taiwan|Japan|Korea|美国|中国|俄罗斯"
 
 
 def rule_triage(text: str) -> dict:
