@@ -41,4 +41,6 @@
 | 5 | 헤드라인 검색 도구 호출 상한 5회(초과 시 도구가 거절), GDELT 타임아웃 4초 + 실패 시 10분간 건너뛰고 Google News RSS | news_input, tools/news |
 | 6 | triage가 규칙으로 떨어질 때 원인(LLM 빈 응답 stop_reason·모델 / 예외 메시지)을 reason에 남김 | triage.classify |
 
-테스트 130 → 137. 재현 사례(젠슨 황 스캔들 기사)는 LLM 경로로 다시 돌려 `not_policy` 또는 토픽 불일치 보류가 나오는지 확인 필요(이 환경은 키·네트워크 없음).
+테스트 130 → 137.
+
+**재현 확인 (11/11 12:27, 데스크탑·LLM 경로):** 같은 연합뉴스 URL을 `--force`로 실행 → `not_policy` 종료(이유: 젠슨 황 CEO 거취 관련 기업 스캔들·주가 하락). Reporter·재시도 없음, Event Analyst 21초, 입력 14,412·출력 1,342 토큰. 이전에는 election_shift로 오분류되어 사건 효과 +1.58%p가 나왔음.
