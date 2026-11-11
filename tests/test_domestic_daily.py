@@ -237,9 +237,19 @@ def test_llm_none_instrument_ends_as_not_policy(ctx):
     assert not st.get("calc_log_id") and llm.calls == 1                 # Reporter·재시도 없음
 
 
-def test_rule_path_without_policy_words_is_not_policy(ctx):
-    st = run_news("엔비디아 이사회가 젠슨 황 CEO 조사에 착수했다. 주가는 4.2% 하락했다.", ctx, NoLLM(), force=True)
-    assert st["status"] == "not_policy"
+def test_rule_path_without_policy_words_is_partial_not_verdict(ctx):
+    # 규칙 경로는 수단 단어를 '못 찾은' 것이지 '정책 사건 아님'을 판정한 게 아니다 -> 판단 보류, 재시도 없음
+    st = run_news("정부가 반도체 기업 법인세 감면 확대 방안을 확정했다.", ctx, NoLLM(), force=True)
+    assert st["status"] == "partial" and "규칙 경로" in st["final_brief"]
+    assert sum(1 for t in st["trace"] if t["node"] == "event_analyst") == 1
+
+
+def test_rule_english_chip_export_control_not_subsidy():
+    text = "The Commerce Department restricted sales of advanced AI chips to China on Tuesday."
+    ev = event_analyst.rule_extract(event_analyst.split_sentences(text))
+    assert ev["instrument"] == "tech_export_control" and ev["initiator"] == "US" and ev["target"] == ["CN"]
+    law = event_analyst.rule_extract(event_analyst.split_sentences("Biden signed the CHIPS and Science Act."))
+    assert law["instrument"] == "industrial_subsidy" and law["initiator"] == "US"
 
 
 def test_missing_evidence_retries_once_then_stops(ctx):

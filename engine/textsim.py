@@ -30,7 +30,7 @@ CONCEPTS: dict[str, tuple[str, float, str]] = {
     "c_currency": ("instrument", 3.0, r"위안화|환율|절하|환율조작|yuan|renminbi|devalu|currency"),
     "c_sanction": ("instrument", 3.0, r"제재|sanction|SWIFT|자산 ?동결|외환보유액|freeze"),
     "c_blockade": ("instrument", 3.0, r"봉쇄|해협|운하|blockade|strait|chokepoint|canal"),
-    "c_subsidy": ("instrument", 3.0, r"보조금|세액 ?공제|subsid|tax credit|CHIPS|인플레이션 ?감축법"),
+    "c_subsidy": ("instrument", 3.0, r"보조금|세액 ?공제|subsid|tax credit|(?-i:CHIPS)|인플레이션 ?감축법"),
     "c_invest": ("instrument", 3.0, r"투자 ?제한|해외 ?투자|outbound investment|investment restriction"),
     "c_domestic_reg": ("instrument", 3.0, r"반독점|antitrust|규제 ?당국|빅테크 ?규제|플랫폼 ?규제|AI ?규제|crackdown|regulator|모라토리엄|moratorium|反垄断|监管"),
     "c_election": ("instrument", 3.0, r"중간선거|대선|총선|선거|election|midterm|选举"),

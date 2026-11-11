@@ -118,6 +118,11 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         fb += [i["detail"] for i in ver.get("issues", []) if i["route"] == "event_analyst"]
         out = event_analyst.analyze(state["raw_input"], llm, fb or None, ctx.thresholds.get("severity"))
         ev = out["event"]
+        if out.get("not_policy") and out["mode"] == "rule":     # 규칙 경로는 '못 찾음'이지 '아님'이 아니다 -> 판단 보류
+            return {"sentences": out["sentences"], "event": {}, "event_complete": False, "event_mode": "rule",
+                    "event_errors": ["규칙 경로(LLM 없음)가 정책 수단을 찾지 못함 — 정책 사건일 수도 있으니 LLM으로 다시 확인"],
+                    "retries": {**_retries(state, "event_analyst"), "event_analyst": max_retries},
+                    "trace": _t("event_analyst", "규칙 경로: 정책 수단 단어 없음 -> 판단 보류", t0)}
         if out.get("not_policy"):                               # (2026-11-11) 정책 사건 아님 -> 바로 종료
             return {"sentences": out["sentences"], "event": {}, "event_complete": False, "not_policy": True,
                     "not_policy_reason": out.get("not_policy_reason", ""), "event_mode": out["mode"],
