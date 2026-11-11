@@ -39,6 +39,10 @@ EVENT_SYSTEM = f"""당신은 국부펀드 리스크관리팀의 지경학 사건
 
 언어: 뉴스는 한국어·영어·중국어 등 어느 언어든 올 수 있습니다. 어휘 값은 위 영문 코드 그대로, title은 한국어로 씁니다.
 
+정책 사건이 아닐 때: 뉴스의 중심 사건이 정부·의회·선거가 만든 정책 조치가 아니면(기업 스캔들·실적·인사, 경제지표, 금리 결정,
+시장 등락 자체) instrument="none"으로 내고 not_policy_reason에 한 줄 이유를 씁니다. 기사 뒷부분에 다른 정책 이야기가 섞여 있어도
+'헤드라인·첫 문단의 중심 사건'이 기준입니다. 억지로 수단을 고르지 않습니다.
+
 규칙:
 1. 모든 판단 필드는 근거 문장 id(s1, s2 ...)를 evidence에 적습니다. 근거가 없으면 그 필드를 uncertain_fields에 넣습니다.
 2. 뉴스에 이 사건과 무관한 같은 시기의 큰 충격(금리 결정, 고용·물가 지표, 전쟁, 실적 쇼크 등)이 나오면 concurrent_shocks에 짧게 적습니다.
@@ -65,7 +69,8 @@ EVENT_SCHEMA = {
     "properties": {
         "title": {"type": "string"},
         "date": {"type": "string"},
-        "instrument": {"type": "string", "enum": INSTRUMENTS},
+        "instrument": {"type": "string", "enum": INSTRUMENTS + ["none"]},
+        "not_policy_reason": {"type": "string"},
         "direction": {"type": "string", "enum": ["escalate", "ease"]},
         "initiator": {"type": "string", "enum": COUNTRIES},
         "target": {"type": "array", "items": {"type": "string", "enum": COUNTRIES}},

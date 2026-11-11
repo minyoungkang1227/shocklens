@@ -227,6 +227,21 @@ def news_date_et(topic: dict, heads: list[dict]) -> dt.date | None:
     return min(ds) if ds else None
 
 
+def topic_match(topic: dict, heads: list[dict], st: dict) -> tuple[float, str]:
+    """(2026-11-11) 토픽(제목·헤드라인)과 사건의 '수단 근거 문장'이 같은 이야기인지. 기사 뒷부분의 다른 정책 문장에
+    끌려간 해석을 거른다. 반환: (최대 문장 유사도, 근거 문장)"""
+    ev = st.get("event") or {}
+    ids = set((ev.get("evidence") or {}).get("instrument") or [])
+    ev_text = " ".join(s["text"] for s in st.get("sentences") or [] if s["id"] in ids)
+    if not ev_text:
+        return 0.0, ""
+    by_id = {h["id"]: h["title"] for h in heads}
+    refs = [topic["title"]] + [by_id[i] for i in topic["headline_ids"] if i in by_id][:8]
+    idf = textsim.build_idf(refs + [ev_text])
+    fe = _clean_feats(ev_text, idf)
+    return max(textsim.cosine(_clean_feats(r, idf), fe) for r in refs), ev_text[:120]
+
+
 def analyze(topic: dict, heads: list[dict], ctx, llm: LLM, cfg: dict, force: bool = False, fetcher=None,
             record: bool = True, now: dt.datetime | None = None) -> dict:
     from . import hq, track_record
@@ -234,6 +249,14 @@ def analyze(topic: dict, heads: list[dict], ctx, llm: LLM, cfg: dict, force: boo
     st = hq.run_news(text, ctx, llm, force=force or topic.get("policy_event", False))
     out = summarize_state(st)
     out["input"] = meta
+    if st.get("status") == "ok":
+        sim, ev_text = topic_match(topic, heads, st)
+        out["topic_match"] = round(sim, 3)
+        if sim < cfg.get("topic_match_min", 0.1):
+            out["topic_mismatch"] = ev_text
+            record = False                                # 토픽과 다른 사건을 계산한 결과는 성적표에 넣지 않는다
+    if st.get("status") == "not_policy":
+        record = False
     if record:                                      # 실전 성적표: 예측을 기록해 두고 3거래일 뒤 자동 채점
         rec = track_record.make_record(st, "daily_watch", news_date_et(topic, heads), now, topic["title"])
         out["forecast"] = {k: rec[k] for k in ("window_start", "pure")} if rec else None
@@ -271,6 +294,13 @@ def render(report: dict, labels: dict) -> str:
             a = t.get("analysis")
             if not a:
                 L.append("- ShockLens 정량 분석: " + (t.get("skip_reason") or "대상 아님"))
+                continue
+            if a["status"] == "not_policy":
+                L.append(f"- ShockLens 정량 분석: 정책 사건 아님으로 종료 ({a.get('brief', '').splitlines()[1][2:] if a.get('brief') else ''})")
+                continue
+            if a.get("topic_mismatch") is not None:
+                L.append(f"- ⚠ 토픽과 사건 근거가 다른 이야기로 보여 정량 결과를 보류합니다 (유사도 {a.get('topic_match')}). "
+                         f"사건 해석의 근거 문장: \"{a['topic_mismatch']}\" · 계산 기록 {a['calc_log_id']}")
                 continue
             if a["status"] == "skipped":
                 L.append(f"- ShockLens 정량 분석: 1차 분류에서 제외 ({(a.get('triage') or {}).get('reason', '')})")

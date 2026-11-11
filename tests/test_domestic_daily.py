@@ -223,3 +223,68 @@ def test_kr_margin_relief_library_event():
     e = {x["id"]: x for x in load_events()}["kr_margin_relief_2026"]
     assert e["instrument"] == "domestic_regulation" and e["direction"] == "ease" and e["target"] == ["KR"]
     assert e["confounder_type"] == "other" and not e["clean"]
+
+
+# ------------------------------------------------------------------ 2026-11-11 점검: 오분류·범위 붕괴·반복 해석
+SCANDAL_NEWS = ("엔비디아 이사회가 젠슨 황 CEO의 개인 거래 의혹에 대한 조사에 착수했다. 주가는 4.2% 하락했다. "
+                "시장에서는 미중 관계 냉각 우려도 거론된다. 한편 미국 중간선거 이후 데이터센터 규제 논의가 이어지고 있다.")
+
+
+def test_llm_none_instrument_ends_as_not_policy(ctx):
+    llm = FakeLLM(jsons=[{"instrument": "none", "not_policy_reason": "기업 지배구조 스캔들"}])
+    st = run_news(SCANDAL_NEWS, ctx, llm, force=True)
+    assert st["status"] == "not_policy" and "정책 사건 아님" in st["final_brief"]
+    assert not st.get("calc_log_id") and llm.calls == 1                 # Reporter·재시도 없음
+
+
+def test_rule_path_without_policy_words_is_not_policy(ctx):
+    st = run_news("엔비디아 이사회가 젠슨 황 CEO 조사에 착수했다. 주가는 4.2% 하락했다.", ctx, NoLLM(), force=True)
+    assert st["status"] == "not_policy"
+
+
+def test_missing_evidence_retries_once_then_stops(ctx):
+    draft = {"title": "x", "instrument": "domestic_regulation", "direction": "escalate", "initiator": "US",
+             "target": ["CN"], "sectors": ["ai_infra"], "stage": "announce", "channels": {"risk_off": 1},
+             "evidence": {}}
+    llm = FakeLLM(jsons=[dict(draft), dict(draft), dict(draft)])
+    st = run_news(SCANDAL_NEWS, ctx, llm, force=True)
+    assert st["status"] == "partial" and not st.get("calc_log_id")       # Reporter까지 가지 않고 판단 보류
+    assert any("직전과 같아" in e for e in st.get("event_errors", []))
+    assert llm.calls == 2                                                  # 같은 해석 3회 반복하지 않음
+
+
+def test_widen_range_opens_collapsed_scenarios():
+    import pandas as pd
+    from engine import shock
+    idx = ["risk_off", "tech_war"]
+    collapsed = pd.DataFrame({"mild": [1.5, -0.02], "central": [1.5, -0.02], "severe": [1.5, -0.02]}, index=idx)
+    syn = pd.DataFrame({"mild": [0.5, -0.005], "central": [1.0, -0.01], "severe": [3.0, -0.04]}, index=idx)
+    out, w = shock.widen_range(collapsed, syn, {"risk_off": 1, "tech_war": -1})
+    assert set(w) == set(idx)
+    assert out.loc["risk_off", "mild"] == 0.5 and out.loc["risk_off", "severe"] == 3.0 and out.loc["risk_off", "central"] == 1.5
+    assert out.loc["tech_war", "mild"] == -0.005 and out.loc["tech_war", "severe"] == -0.04
+
+
+def test_topic_match_flags_evidence_from_other_story():
+    heads = [{"id": 1, "title": "젠슨 황 스캔들에 엔비디아 급락"}, {"id": 2, "title": "엔비디아 이사회, CEO 조사 착수"}]
+    topic = {"title": "젠슨 황 스캔들·미중 관계 냉각 우려", "headline_ids": [1, 2]}
+    st = {"event": {"evidence": {"instrument": ["s4"]}},
+          "sentences": [{"id": "s4", "text": "한편 미국 중간선거 이후 데이터센터 건설 규제 논의가 이어지고 있다."}]}
+    sim, _ = dw.topic_match(topic, heads, st)
+    assert sim < 0.1
+    ok_topic = {"title": "美 데이터센터 규제 공포", "headline_ids": [1]}
+    ok_heads = [{"id": 1, "title": "美 데이터센터 건설 규제 우려에 반도체주 급락"}]
+    assert dw.topic_match(ok_topic, ok_heads, st)[0] >= 0.1
+
+
+def test_news_tool_call_cap():
+    from agents import news_input
+    news_input._calls["n"] = news_input.MAX_TOOL_CALLS
+    r = news_input._call("search_news", {"query": "x"})
+    assert "상한" in r["error"] and r["results"] == []
+
+
+def test_triage_records_why_llm_fell_back():
+    from agents import triage
+    t = triage.classify("미국이 중국산 반도체에 관세를 부과했다.", FakeLLM(jsons=[None]))
+    assert t["mode"] == "rule" and "LLM 응답 없음" in t["reason"]

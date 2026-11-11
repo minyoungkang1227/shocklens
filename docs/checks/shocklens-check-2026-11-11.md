@@ -30,3 +30,15 @@
 - us_midterm_2026은 이미 라이브러리에 편입(가중 0.5), 성적표: 예측 중앙 -0.25% / 실제 -0.71% / 구간 적중, '사후 해석' 분류
 - 국면: 최근 5거래일 VIX 평균 22.1 → 위기, 국면 효과 +5.69%p. 美 CPI 상회·10년물 5% 보도
 - 연합뉴스 경제 피드 ConnectionError
+
+## 반영 (fix30, 2026-11-11)
+| # | 수정 | 위치 |
+|---|---|---|
+| 1 | 수단 enum에 `none` + `not_policy_reason`. 중심 사건이 정책 조치가 아니면 HQ가 `not_policy`로 종료(Reporter·재시도 없음). 규칙 경로도 정책 수단 단어가 없으면 같은 출구 | prompts, event_analyst.analyze, hq(n_not_policy) |
+| 2 | 데일리 워치: 토픽 제목·헤드라인 vs 수단 근거 문장 유사도 < `topic_match_min`(0.1)이면 정량 결과 보류·성적표 기록 제외 | daily_watch.topic_match |
+| 3 | 유사 사건 1~2건(event_level)이면 mild는 덜 나쁜 쪽, severe는 더 나쁜 쪽을 강도 분위수와 비교해 넓힘(`+widen`) | shock.widen_range, shock_mapper |
+| 4 | LLM 해석의 필수 필드(수단·발동국·대상국)에 근거 문장이 없으면 Reporter 전에 재해석. 재해석이 직전과 같으면 바로 판단 보류 | hq.n_event |
+| 5 | 헤드라인 검색 도구 호출 상한 5회(초과 시 도구가 거절), GDELT 타임아웃 4초 + 실패 시 10분간 건너뛰고 Google News RSS | news_input, tools/news |
+| 6 | triage가 규칙으로 떨어질 때 원인(LLM 빈 응답 stop_reason·모델 / 예외 메시지)을 reason에 남김 | triage.classify |
+
+테스트 130 → 137. 재현 사례(젠슨 황 스캔들 기사)는 LLM 경로로 다시 돌려 `not_policy` 또는 토픽 불일치 보류가 나오는지 확인 필요(이 환경은 키·네트워크 없음).

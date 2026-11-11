@@ -56,6 +56,14 @@ def map_shock(event: dict, analog_ids: list[str], tier: str, exposure: dict, ctx
             method = f"event_level({len(analog_ids)})"
             if len(analog_ids) == 1:
                 warnings.append("유사 사건이 1건뿐이라 사건 실측만으로는 범위를 잡을 수 없습니다.")
+            # (2026-11-11) 사건이 1~2건이면 mild=central=severe로 붕괴할 수 있다 -> 강도 분위수로 양끝을 벌린다
+            syn = shock.from_severity(event["channels"], event["severity"], ctx.q_up, ctx.q_down,
+                                      th["severity"]["quantile_map"], list(F.columns))
+            f_shock, widened = shock.widen_range(f_shock, syn, event["channels"])
+            if widened:
+                warnings.append("비교 사건이 적어 시나리오 범위가 한 점으로 모여, mild·severe를 강도 기준 분위수로 넓혔습니다: "
+                                f"{', '.join(ctx.labels.get(f, f) for f in widened)}.")
+                method += "+widen"
         if flipped:
             warnings.append(f"유사 사건에서 기대와 반대로 움직인 값 {len(flipped)}개를 0으로 처리했습니다.")
         bcfg = {"partial_unclean_weight": acfg.get("partial_unclean_weight", 0.5),

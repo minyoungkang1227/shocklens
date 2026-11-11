@@ -55,9 +55,13 @@ def classify(text: str, llm: LLM | None = None) -> dict:
                 imp = min(max(int(r["importance"]), 1), 5)
                 return {"relevant": bool(r.get("relevant", True)), "importance": imp,
                         "reason": str(r.get("reason", ""))[:120], "mode": "llm", "model": getattr(llm, "model", "")}
+            out = rule_triage(text)                       # (2026-11-11) 빈 응답도 원인을 남긴다
+            meta = getattr(llm, "last_meta", {}) or {}
+            out["reason"] += f" / LLM 응답 없음({meta.get('stop_reason', '?')}, 모델 {getattr(llm, 'model', '?')})"
+            return {**out, "mode": "rule", "model": None}
         except Exception as e:
             out = rule_triage(text)
-            out["reason"] += f" / LLM 실패: {type(e).__name__}"
+            out["reason"] += f" / LLM 실패: {type(e).__name__}: {str(e)[:80]}"
             return {**out, "mode": "rule", "model": None}
     return {**rule_triage(text), "mode": "rule", "model": None}
 
