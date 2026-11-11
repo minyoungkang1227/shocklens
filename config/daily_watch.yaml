@@ -26,3 +26,4 @@ cluster_threshold: 0.35      # 규칙 경로: 헤드라인 문장 유사도가 �
 fetch_article: true          # 토픽 대표 기사 본문을 가져와 분석 (실패하면 헤드라인 묶음으로)
 stale_data_days: 4           # 가격 데이터가 이 영업일 이상 오래되면 경고 (--refresh로 갱신)
 output_dir: data/daily       # 보고서 저장 위치 (같은 날 다시 돌리면 _v2, _v3)
+topic_match_min: 0.1         # (2026-11-11) 토픽 제목·헤드라인과 사건 근거 문장의 유사도가 이 미만이면 정량 결과 보류 (기사 속 다른 정책 문장에 끌려간 해석 차단)

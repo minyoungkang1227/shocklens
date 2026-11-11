@@ -240,6 +240,9 @@ ShockLens의 핵심은 '사건 하나 → 단기 꼬리 손실'이고, 아래 �
 - 채점: backtest와 같은 지표(방향, 범위, 예측구간 적중·폭, severe 커버, 절대오차) + 예측 중앙 충격이 가장 큰 바스켓이 실제 최대 손실 바스켓이었나.
 - 첫 기록: 2026-11-05 중간선거 데이터센터 규제(10/30 데이터 기준, 사후 해석) — 중앙 −0.25%, 최악 −0.42%, 예측구간 −1.54%~+1.02%. 11/9 장 마감 후 데이터 갱신 시 채점.
 
+## 4-7. 정책 사건 아님 출구와 오분류 방어 (fix30, 2026-11-11)
+점검 기록 `docs/checks/shocklens-check-2026-11-11.md`. Event Analyst가 수단 enum에서 무조건 하나를 고르던 구조를 고쳐 `instrument="none"`이면 HQ가 `not_policy`로 끝낸다. 데일리 워치는 토픽과 근거 문장이 다른 이야기면 정량 결과를 보류하고, 유사 사건이 1~2건일 때 시나리오 범위가 한 점으로 모이지 않게 강도 분위수로 넓힌다. 근거 없는 해석은 Reporter 전에 되돌리고, 같은 해석이 반복되면 바로 판단 보류.
+
 ## 5. 구현 위치
 
 `agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · 테스트 `tests/test_domestic_daily.py`

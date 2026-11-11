@@ -118,6 +118,25 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         fb += [i["detail"] for i in ver.get("issues", []) if i["route"] == "event_analyst"]
         out = event_analyst.analyze(state["raw_input"], llm, fb or None, ctx.thresholds.get("severity"))
         ev = out["event"]
+        if out.get("not_policy"):                               # (2026-11-11) 정책 사건 아님 -> 바로 종료
+            return {"sentences": out["sentences"], "event": {}, "event_complete": False, "not_policy": True,
+                    "not_policy_reason": out.get("not_policy_reason", ""), "event_mode": out["mode"],
+                    "event_errors": [], "retries": _retries(state, "event_analyst"),
+                    "trace": _t("event_analyst", f"정책 사건 아님 [{out['mode']}] {out.get('not_policy_reason', '')}", t0)}
+        # (2026-11-11) 근거 검사를 Reporter 전에: LLM 해석의 필수 필드에 뉴스 근거가 없으면 여기서 재해석
+        if ev and out["event_complete"] and out["mode"] == "llm":
+            no_ev = [f for f in ("instrument", "initiator", "target") if f not in (ev.get("evidence") or {})]
+            if no_ev:
+                out["event_complete"] = False
+                out["event_errors"] = [f"필수 필드에 뉴스 근거 문장 없음: {no_ev}. 근거 문장이 없으면 instrument='none'으로 내세요."]
+        # 재해석이 직전과 같으면 더 돌려도 같은 답 -> 재시도 횟수를 소진시켜 바로 판단 보류
+        prev = state.get("event") or {}
+        key = lambda e: (e.get("instrument"), e.get("initiator"), tuple(e.get("target") or []),
+                         tuple((e.get("evidence") or {}).get("instrument") or []))
+        repeat = bool(prev and ev and "event_analyst" in (state.get("retries") or {}) and key(prev) == key(ev)
+                      and not out["event_complete"])
+        if repeat:
+            out["event_errors"] = list(out["event_errors"]) + ["재해석 결과가 직전과 같아 재시도를 중단"]
         summ = (f"{ev.get('instrument')} {ev.get('initiator')}→{ev.get('target')} 강도 {ev.get('severity')}({ev.get('severity_points', 0):.0f}) "
                 f"[{out['mode']}]" + (f" 지시문 의심 {len(out['injection_flags'])}건" if out.get("injection_flags") else "")
                 + (f" / LLM 실패: {out['llm_error']}" if out.get("llm_error") else "")
@@ -128,10 +147,13 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
             att = _attention(ev, acfg)
             if att.get("adjusted"):
                 ev = att.pop("adjusted")
+        retries = _retries(state, "event_analyst")
+        if repeat:
+            retries = {**retries, "event_analyst": max_retries}
         return {"attention": att, "sentences": out["sentences"], "event": ev, "event_complete": out["event_complete"],
                 "event_errors": out["event_errors"], "event_mode": out["mode"],
                 "injection_flags": out.get("injection_flags", []),
-                "retries": _retries(state, "event_analyst"), "trace": _t("event_analyst", summ, t0)}
+                "retries": retries, "trace": _t("event_analyst", summ + (" / 직전과 같은 해석 -> 중단" if repeat else ""), t0)}
 
     def n_analog(state: ShockLensState) -> dict:
         t0 = time.time()
@@ -200,6 +222,13 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         return {"status": "partial", "final_brief": head + ("\n\n" + body if body else ""),
                 "trace": _t("hq", "판단 보류 종료", time.time())}
 
+    def n_not_policy(state: ShockLensState) -> dict:
+        r = state.get("not_policy_reason", "")
+        brief = ("## 정책 사건 아님\n"
+                 f"- Event Analyst 판단: 뉴스의 중심 사건이 정부·의회·선거가 만든 정책 조치가 아닙니다. {r}\n"
+                 "- ShockLens는 정책 사건의 포트폴리오 꼬리 위험만 계산합니다. 시장 이벤트 자체의 영향은 계산하지 않습니다.")
+        return {"status": "not_policy", "final_brief": brief, "trace": _t("hq", "정책 사건 아님으로 종료", time.time())}
+
     def n_need_user(state: ShockLensState) -> dict:
         q = "이 사건이 어떤 경로(위험회피·유가·위안화·반도체 등)로 시장에 영향을 줄지 가정을 알려주세요."
         return {"status": "need_user", "needs_user": q, "final_brief": f"## 추가 정보 필요\n{q}",
@@ -213,6 +242,8 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         return "skipped"
 
     def gate_event(state: ShockLensState):
+        if state.get("not_policy"):
+            return "not_policy"
         if state.get("event_complete"):
             if not state["event"].get("channels"):
                 return "need_user"
@@ -235,20 +266,20 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
                      ("shock_mapper", n_shock), ("risk_engine", n_risk), ("reporter", n_reporter),
                      ("verifier", n_verifier), ("finalize", n_finalize), ("partial_end", n_partial),
                      ("need_user", n_need_user), ("news_input", n_news_input), ("triage", n_triage),
-                     ("skipped", n_skipped)]:
+                     ("skipped", n_skipped), ("not_policy", n_not_policy)]:
         g.add_node(name, fn)
     g.add_edge(START, entry)
     g.add_edge("news_input", "triage")
     g.add_conditional_edges("triage", gate_triage, ["event_analyst", "skipped"])
     g.add_conditional_edges("event_analyst", gate_event,
-                            ["event_analyst", "analog_finder", "exposure_analyst", "need_user", "partial_end"])
+                            ["event_analyst", "analog_finder", "exposure_analyst", "need_user", "partial_end", "not_policy"])
     g.add_edge(["analog_finder", "exposure_analyst"], "shock_mapper")    # 둘 다 끝나야 합류
     g.add_edge("shock_mapper", "risk_engine")
     g.add_edge("risk_engine", "reporter")
     g.add_edge("reporter", "verifier")
     g.add_conditional_edges("verifier", gate_verify,
                             ["finalize", "reporter", "event_analyst", "shock_mapper", "partial_end"])
-    for n in ("finalize", "partial_end", "need_user", "skipped"):
+    for n in ("finalize", "partial_end", "need_user", "skipped", "not_policy"):
         g.add_edge(n, END)
     return g.compile()
 

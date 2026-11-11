@@ -120,6 +120,8 @@ class ShockLensState(TypedDict, total=False):
     sentences: list[dict]              # [{"id": "s1", "text": ...}]
     event: dict                        # Event.model_dump()
     event_complete: bool
+    not_policy: bool                   # Event Analyst가 '정책 사건 아님'으로 판정 (2026-11-11)
+    not_policy_reason: str
     event_preset: bool                 # 라이브러리 사건으로 바로 시작(뉴스 해석 생략)
     event_errors: list[str]
     event_mode: str                    # llm / rule / preset
@@ -150,7 +152,7 @@ class ShockLensState(TypedDict, total=False):
     sources: dict[str, str]            # [src:id] -> 설명
     verification: dict
     final_brief: str
-    status: str                        # ok / partial / need_user / skipped
+    status: str                        # ok / partial / need_user / skipped / not_policy
     retries: dict[str, int]
     whatif_overrides: dict
     regime_override: str | None        # 'crisis'/'normal' 국면 강제 (시나리오·What-if)

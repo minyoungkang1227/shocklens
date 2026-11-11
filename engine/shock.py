@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 SCENARIOS = ["mild", "central", "severe"]
@@ -165,6 +166,26 @@ def borrow_channels(event: dict, analog_ids: list[str], analog_weights: dict[str
             out.loc[f, name] = d * weighted_quantile(col.to_numpy(), list(pool.values()), q)
         used[f] = sorted(donors, key=lambda i: -donors[i])
     return out, used
+
+
+def widen_range(shock: pd.DataFrame, synthetic: pd.DataFrame, channels: dict[str, int]
+                ) -> tuple[pd.DataFrame, list[str]]:
+    """유사 사건이 1~2건(event_level)이면 mild·central·severe가 같은 값으로 모일 수 있다(범위 붕괴, 2026-11-11 점검).
+    채널마다 mild는 (사건 값, 강도 합성 mild) 중 0에 가까운 쪽, severe는 (사건 값, 강도 합성 severe) 중 더 극단인 쪽으로 둔다.
+    central은 사건 실측 그대로. 돌려주는 값: (보정된 표, 넓힌 팩터 목록)"""
+    out = shock.copy()
+    widened = []
+    for f, d in channels.items():
+        if f not in out.index or f not in synthetic.index:
+            continue
+        m, s = float(out.loc[f, "mild"]), float(out.loc[f, "severe"])
+        sm, ss = float(synthetic.loc[f, "mild"]), float(synthetic.loc[f, "severe"])
+        new_m = m if d * m <= d * sm else sm            # 방향 기준으로 덜 나쁜 쪽
+        new_s = s if d * s >= d * ss else ss            # 방향 기준으로 더 나쁜 쪽
+        if not (np.isclose(new_m, m) and np.isclose(new_s, s)):
+            out.loc[f, "mild"], out.loc[f, "severe"] = new_m, new_s
+            widened.append(f)
+    return out, widened
 
 
 def apply_severe_floor(shock: pd.DataFrame, channels: dict[str, int], severity: int, q_up: pd.DataFrame,

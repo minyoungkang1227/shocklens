@@ -31,17 +31,28 @@ def input_kind(text: str, headline_max_chars: int = 140) -> str:
     return "article"
 
 
+GDELT_TIMEOUT = 4.0          # (2026-11-11) GDELT가 느리면 오래 기다리지 않고 Google News RSS로 넘어간다
+GDELT_COOLDOWN = 600         # 타임아웃·오류가 나면 이 시간(초) 동안 GDELT를 건너뛴다
+_gdelt_down_until = {"t": 0.0}
+
+
 def search_news(query: str, max_results: int = 5, timeout: float = 8.0,
                 start: str | None = None, end: str | None = None) -> dict:
     """{results: [...], engine, error}. start/end = 'YYYY-MM-DD' (GDELT 기간 검색, 2017년 이후)"""
+    import time
     err = []
+    if time.time() < _gdelt_down_until["t"] and not start:
+        err.append("gdelt: 직전 실패로 잠시 건너뜀")
     params = {"query": query, "mode": "ArtList", "format": "json", "maxrecords": max_results, "sort": "HybridRel"}
     if start:
         params["startdatetime"] = start.replace("-", "") + "000000"
     if end:
         params["enddatetime"] = end.replace("-", "") + "235959"
     try:
-        r = requests.get("https://api.gdeltproject.org/api/v2/doc/doc", params=params, headers=UA, timeout=timeout)
+        if err:
+            raise RuntimeError("skip")
+        r = requests.get("https://api.gdeltproject.org/api/v2/doc/doc", params=params, headers=UA,
+                         timeout=min(timeout, GDELT_TIMEOUT))
         r.raise_for_status()
         arts = (r.json() or {}).get("articles", [])
         res = [{"title": a.get("title", ""), "url": a.get("url", ""), "source": a.get("domain", ""),
@@ -49,7 +60,9 @@ def search_news(query: str, max_results: int = 5, timeout: float = 8.0,
         if res or start:
             return {"results": res, "engine": "gdelt", "error": None}
     except Exception as e:
-        err.append(f"gdelt: {type(e).__name__}")
+        if not err:
+            err.append(f"gdelt: {type(e).__name__}")
+            _gdelt_down_until["t"] = time.time() + GDELT_COOLDOWN
     try:
         hl = "ko" if re.search(r"[가-힣]", query) else "en"
         url = f"https://news.google.com/rss/search?q={quote_plus(query)}&hl={hl}"

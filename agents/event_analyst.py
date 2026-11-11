@@ -434,10 +434,18 @@ def analyze(raw_text: str, llm: LLM, feedback: list[str] | None = None, severity
                 if len(samples) > 1:
                     med, spread = consensus(samples)
                     draft = {**draft, "severity_components": med}
+    if draft and draft.get("instrument") == "none":               # (2026-11-11) 정책 사건 아님 출구
+        return {"sentences": sentences, "event": {}, "event_complete": False, "not_policy": True,
+                "not_policy_reason": str(draft.get("not_policy_reason") or "중심 사건이 정책 조치가 아님")[:160],
+                "event_errors": [], "mode": mode, "llm_error": llm_error, "injection_flags": flags}
     clean_sents = [s for s in sentences if s["id"] not in flagged]      # 규칙 경로·단어 방향 판단에서도 의심 문장은 뺀다
     clean_text = " ".join(s["text"] for s in clean_sents) if flagged else raw_text
     if draft is None:
         draft = rule_extract(clean_sents)
+        if not draft.get("instrument"):                           # 규칙 경로: 정책 수단 단어가 하나도 없으면 정책 사건 아님
+            return {"sentences": sentences, "event": {}, "event_complete": False, "not_policy": True,
+                    "not_policy_reason": "정책 수단 단어가 없음 (규칙 판정)", "event_errors": [], "mode": mode,
+                    "llm_error": llm_error, "injection_flags": flags}
     event, errors = guard(draft, sentences, clean_text, severity_cfg, flagged)
     if event is None and mode == "llm":              # LLM 초안이 필수 필드를 못 채우면 규칙으로 보충
         merged = {**rule_extract(clean_sents), **{k: v for k, v in draft.items() if v}}
@@ -469,6 +477,7 @@ def analyze(raw_text: str, llm: LLM, feedback: list[str] | None = None, severity
         "sentences": sentences,
         "event": event.model_dump() if event else {},
         "event_complete": event is not None,
+        "not_policy": False,
         "event_errors": errors,
         "mode": mode,
         "llm_error": llm_error,
