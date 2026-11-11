@@ -48,12 +48,14 @@ KW_INSTRUMENT = [   # 위에서부터 먼저 걸리는 것 (구체적인 수단 
                             r"(AI|tech|platform) (regulation|crackdown)|crackdown|反垄断|监管|整顿|"
                             # 국내 규제 완화·시장 안정 조치 (2026-11-10): 의무 면제·특례·공매도·담보비율
                             r"규제 ?완화|의무[^.]{0,6}면제|한시 ?(면제|허용|유예)|특례|공매도|담보 ?비율|반대매매|deregulat|waive"),
-    ("industrial_subsidy", r"보조금|세액 ?공제|인플레이션 ?감축법|반도체법|CHIPS|IRA(?![A-Za-z])|subsid|tax credit|현지화|local content|补贴"),
+    ("industrial_subsidy", r"보조금|세액 ?공제|인플레이션 ?감축법|반도체법|(?-i:CHIPS)|(?-i:IRA)(?![A-Za-z])|subsid|tax credit|현지화|local content|补贴"),
     ("financial_sanction", r"SWIFT|자산 ?동결|금융제재|외환보유액|sanction|freeze|制裁|冻结"),
     ("entity_list", r"엔티티 ?리스트|entity list|거래 ?제한 ?명단|实体清单|不可靠实体"),
     ("tariff_pause", r"관세[^.]{0,20}(유예|인하|철회|합의)|유예|휴전|pause|truce|rollback|공동성명|joint statement|暂停|休战|联合声明"),
     ("resource_export_control", r"희토류|갈륨|게르마늄|안티몬|흑연|광물|rare earth|gallium|germanium|graphite|稀土|镓|锗|锑|石墨"),
-    ("tech_export_control", r"반도체[^.]{0,20}(수출|통제)|수출통제|export control|칩 ?통제|出口管制|芯片"),
+    ("tech_export_control", r"반도체[^.]{0,20}(수출|통제)|수출통제|export control|칩 ?통제|出口管制|芯片|"
+                            r"(restrict|curb|ban|limit)\w*[^.]{0,30}(sales|exports?|shipments?)[^.]{0,30}chips?|"
+                            r"chips?[^.]{0,20}export (restriction|curb|ban|license)s?|export (restriction|curb|ban)s?"),
     ("currency", r"위안화|환율조작|절하|devalu|currency manipulator|汇率|贬值"),
     ("tariff", r"관세|tariff|301조|关税|加征"),
     ("election_shift", r"중간선거|대선|총선|선거 ?결과|정권 ?교체|election|midterm|选举|大选"),
@@ -63,7 +65,8 @@ ENACTED = r"시행|발효|통과|의결|서명|공포|확정|발표했|단행|en
 DEREG = r"규제 ?완화|의무[^.]{0,6}면제|한시 ?(면제|허용|유예)|특례|deregulat|waive"
 KW_COUNTRY = {
     "US": r"미국|미 정부|백악관|트럼프|바이든|상무부 BIS|BIS|USTR|U\.S\.|United States|Washington|美国|美方|"
-          r"美(?!元)|(?<![가-힣])미 (?=[가-힣])|뉴욕증시|월가|나스닥|연준|Wall Street|Nasdaq|Dow(?![a-z])|Congress|Senate|Democrats|Republicans",
+          r"美(?!元)|(?<![가-힣])미 (?=[가-힣])|뉴욕증시|월가|나스닥|연준|Wall Street|Nasdaq|Dow(?![a-z])|Congress|Senate|Democrats|Republicans|"
+          r"Commerce Department|Department of Commerce|White House|Treasury Department|Pentagon|Trump|Biden",
     "CN": r"중국|베이징|시진핑|China|Beijing|中国|中方|商务部",
     "EU": r"유럽|(?<![A-Za-z])EU(?![A-Za-z])|European",
     "JP": r"일본|Japan|日本",
@@ -128,7 +131,8 @@ def rule_extract(sentences: list[dict]) -> dict:
     for c in order:
         for m in re.finditer(KW_COUNTRY[c], text, re.I):
             nxt = text[m.end():m.end() + 10]
-            if tgt_mark.match(nxt):
+            prev = text[max(0, m.start() - 12):m.start()]
+            if tgt_mark.match(nxt) or re.search(r"\b(to|against|on|targeting|from|into)\s+$", prev, re.I):
                 targets_hint.add(c)
             elif init_mark.match(nxt):
                 init_hint.add(c)

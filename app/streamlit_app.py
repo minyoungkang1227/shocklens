@@ -233,7 +233,7 @@ def show_result(res: dict, title: str) -> None:
         st.success(f"{title} · 검증 통과 · 계산 기록 {res.get('calc_log_id')}")
     elif status == "partial":
         st.warning(f"{title} · 판단 보류 (일부 결과만 제공)")
-    elif status == "skipped":
+    elif status in ("skipped", "not_policy"):
         st.info(res.get("final_brief", "중요도 미달로 분석을 생략했습니다"))
         return
     else:
