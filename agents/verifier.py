@@ -84,10 +84,14 @@ def check(final: str, facts: dict[str, str], sources: dict[str, str], risk_resul
     # 다른 사실값과 글자가 겹치는 값(예: +0.00% 가 +0.00%p 안에)은 오탐을 막기 위해 '%p'가 붙지 않은 경우만 본다
     loss_rx = [re.compile(re.escape(v) + r"(?![p\d])") for v in loss_vals]
     nmc = facts.get("NORMAL_MC_ES")
+    nmc_rx = re.compile(r"(?<![\d.])" + re.escape(nmc)) if nmc else None
+    nmc_shared = bool(nmc) and any(v == nmc for k, v in facts.items() if k != "NORMAL_MC_ES")
     for s in _sentences(final):
         if any(r.search(s) for r in loss_rx) and "20거래일" in s and "3거래일" not in s:
             issues.append(Issue(kind="label", detail=f"3거래일 시나리오 수익률을 20거래일로 표기: {s[:50]}", route="reporter"))
-        if nmc and nmc in s and "정규" not in s:
+        # (2026-11-12) 다른 사실값과 글자가 같으면(예: 정규 ES 2.00% = 중국 블록 비중 2.00%) 어느 값인지 알 수 없어 검사하지 않는다.
+        # 앞에 숫자가 붙은 경우(12.00% 안의 2.00%)도 같은 값이 아니다.
+        if nmc and nmc_rx.search(s) and "정규" not in s and not nmc_shared:
             issues.append(Issue(kind="label", detail=f"정규분포 가정 ES를 다른 이름으로 표기: {s[:50]}", route="reporter"))
     # 5-3 지시문 의심 문장 인용
     bad = {f["id"] for f in event.get("injection_flags") or []}

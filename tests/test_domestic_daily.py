@@ -298,3 +298,15 @@ def test_triage_records_why_llm_fell_back():
     from agents import triage
     t = triage.classify("미국이 중국산 반도체에 관세를 부과했다.", FakeLLM(jsons=[None]))
     assert t["mode"] == "rule" and "LLM 응답 없음" in t["reason"]
+
+
+def test_verifier_normal_es_label_ignores_coincident_values():
+    from agents import verifier
+    facts = {"NORMAL_MC_ES": "2.00%", "BLOC_CN": "2.00%"}
+    brief = "## 요약\n구조 점검: 중국 블록 비중은 2.00%입니다 [calc].\n정규분포를 가정하면 ES는 2.00%입니다 [calc]."
+    ev = {"evidence": {"instrument": ["s1"], "initiator": ["s1"], "target": ["s1"]}}
+    rr = {"decomposition": {"event_effect_ES": 0.0}}
+    v = verifier.check(brief, facts, {}, rr, ev)
+    assert not any(i["kind"] == "label" for i in v["issues"])
+    v2 = verifier.check("## 요약\n평상시 ES는 2.00%입니다 [calc].", {"NORMAL_MC_ES": "2.00%"}, {}, rr, ev)
+    assert any(i["kind"] == "label" for i in v2["issues"])          # 겹치지 않으면 여전히 잡는다
