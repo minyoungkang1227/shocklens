@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from .injection import SYSTEM_RULE
+from .injection import SYSTEM_RULE, sanitize, suspicious
 from .llm import LLM
 
 SCHEMA = {"type": "object", "properties": {
@@ -35,6 +35,11 @@ BIG = r"전면|모든|전체|all |全面|즉시|immediately|立即|보복|retali
 COUNTRY = r"미국|중국|러시아|대만|일본|한국|금융당국|EU|유럽|U\.S\.|United States|China|Russia|Taiwan|Japan|Korea|美国|中国|俄罗斯"
 
 
+def _with_flags(reason: str, flags: list[str]) -> str:
+    """지시문 의심 문구가 있으면 판정 이유에 남긴다(중요도가 주입으로 움직였는지 사람이 보게)."""
+    return reason if not flags else f"{reason} / 지시문 의심 {len(flags)}건: {flags[0]}"
+
+
 def rule_triage(text: str) -> dict:
     pol = len(set(m.group(0).lower() for m in re.finditer(POLICY, text, re.I)))
     cty = len(set(m.group(0) for m in re.finditer(COUNTRY, text, re.I)))
@@ -47,23 +52,35 @@ def rule_triage(text: str) -> dict:
 
 
 def classify(text: str, llm: LLM | None = None) -> dict:
-    """반환: {relevant, importance, reason, mode(llm/rule), model}"""
+    """반환: {relevant, importance, reason, mode(llm/rule), model, injection_flags}
+
+    text는 외부 기사 본문이다. 구획(<news>)에 넣기 전에 sanitize()로 닫는 태그를 지운다.
+    지우지 않으면 본문의 </news> 한 줄로 구획을 빠져나와 분류자에게 직접 지시할 수 있다
+    (주입 문구는 importance를 올려 전체 파이프라인을 태우거나, 내려 사건을 묻을 수 있다).
+    """
+    flags = suspicious(text)
     if llm is not None and llm.enabled:
         try:
-            r = llm.complete_json(SYSTEM, f"<news>\n{text[:4000]}\n</news>", max_tokens=300, schema=SCHEMA, name="emit")
+            r = llm.complete_json(SYSTEM, f"<news>\n{sanitize(text)[:4000]}\n</news>",
+                                  max_tokens=300, schema=SCHEMA, name="emit")
             if r and "importance" in r:
                 imp = min(max(int(r["importance"]), 1), 5)
                 return {"relevant": bool(r.get("relevant", True)), "importance": imp,
-                        "reason": str(r.get("reason", ""))[:120], "mode": "llm", "model": getattr(llm, "model", "")}
+                        "reason": _with_flags(str(r.get("reason", ""))[:120], flags),
+                        "mode": "llm", "model": getattr(llm, "model", ""), "injection_flags": flags}
             out = rule_triage(text)                       # (2026-11-11) 빈 응답도 원인을 남긴다
             meta = getattr(llm, "last_meta", {}) or {}
             out["reason"] += f" / LLM 응답 없음({meta.get('stop_reason', '?')}, 모델 {getattr(llm, 'model', '?')})"
-            return {**out, "mode": "rule", "model": None}
+            out["reason"] = _with_flags(out["reason"], flags)
+            return {**out, "mode": "rule", "model": None, "injection_flags": flags}
         except Exception as e:
             out = rule_triage(text)
             out["reason"] += f" / LLM 실패: {type(e).__name__}: {str(e)[:80]}"
-            return {**out, "mode": "rule", "model": None}
-    return {**rule_triage(text), "mode": "rule", "model": None}
+            out["reason"] = _with_flags(out["reason"], flags)
+            return {**out, "mode": "rule", "model": None, "injection_flags": flags}
+    out = rule_triage(text)
+    out["reason"] = _with_flags(out["reason"], flags)
+    return {**out, "mode": "rule", "model": None, "injection_flags": flags}
 
 
 def passes(t: dict, min_importance: int) -> bool:
