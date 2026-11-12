@@ -25,17 +25,15 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import requests
 import yaml
 
 from engine import textsim
 from pipeline import config
+from tools.news import get_capped, parse_xml
 
 from .injection import SYSTEM_RULE, sanitize, suspicious
 from .llm import LLM
 from .triage import rule_triage
-
-UA = {"User-Agent": "Mozilla/5.0 (ShockLens daily watch)"}
 
 TOPIC_SCHEMA = {"type": "object", "properties": {"topics": {"type": "array", "items": {
     "type": "object", "properties": {
@@ -69,7 +67,7 @@ def load_cfg(path: Path | None = None) -> dict:
 
 def parse_feed(content: bytes, source: str, limit: int = 40) -> list[dict]:
     """RSS 2.0 / Atom 모두 처리. [{title, url, source, published}]"""
-    root = ET.fromstring(content)
+    root = parse_xml(content)                 # DTD 엔티티 폭탄 차단 (tools.news.parse_xml)
     out = []
     items = root.findall(".//item") or root.findall(".//{http://www.w3.org/2005/Atom}entry")
     for it in items[:limit]:
@@ -92,9 +90,8 @@ def parse_feed(content: bytes, source: str, limit: int = 40) -> list[dict]:
 def collect(region: dict, max_per_feed: int = 40, timeout: float = 10.0, fetcher=None) -> tuple[list[dict], list[str]]:
     """(중복 제거한 헤드라인, 실패한 피드 메모). fetcher(url) -> bytes 로 테스트에서 바꿔 끼운다."""
     def _get(url: str) -> bytes:
-        r = requests.get(url, headers=UA, timeout=timeout)
-        r.raise_for_status()
-        return r.content
+        # 설정에 적힌 고정 피드지만 응답 본문은 외부가 정한다 -> 상한을 두고 읽는다
+        return get_capped(url, timeout)
     fetcher = fetcher or _get
     heads, errors, seen = [], [], {}
     for fd in region.get("feeds", []):

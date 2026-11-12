@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html
 import ipaddress
+import json
 import re
 import socket
 import xml.etree.ElementTree as ET
@@ -66,7 +67,13 @@ def assert_public_host(host: str) -> list[str]:
 
 
 def assert_fetchable(url: str) -> str:
-    """스킴과 호스트를 검사하고 정리한 URL을 돌려준다."""
+    """스킴과 호스트를 검사하고 정리한 URL을 돌려준다.
+
+    한계(의도적으로 남김): 여기서 이름을 풀어 검사한 뒤 requests가 다시 풀기 때문에,
+    TTL이 짧은 이름이 검사 때는 공개 주소, 실제 요청 때는 내부 주소를 답하는 DNS
+    재바인딩은 막지 못한다. 막으려면 검증한 IP로 직접 접속하고 Host 헤더를 따로 넣어야
+    하는데(커스텀 어댑터), 조사용 도구에 비해 과한 구조라 잔여 위험으로 둔다.
+    """
     u = (url or "").strip()
     parts = urlsplit(u)
     if parts.scheme.lower() not in ALLOWED_SCHEMES:
@@ -110,6 +117,44 @@ def _decode(r, raw: bytes) -> str:
         return raw.decode(enc or "utf-8", errors="replace")
     except LookupError:
         return raw.decode("utf-8", errors="replace")
+
+
+try:                                        # requirements에 있지만, 없어도 안전하게 돌도록 분기한다
+    from defusedxml.ElementTree import fromstring as _defused_fromstring
+except ImportError:
+    _defused_fromstring = None
+
+_DOCTYPE = re.compile(rb"<!DOCTYPE", re.I)
+
+
+def parse_xml(data: bytes):
+    """외부 피드 XML을 파싱한다. DTD 엔티티 폭탄(billion laughs)을 막는다.
+
+    xml.etree.ElementTree는 내부 DTD 엔티티를 그대로 펼친다 — 확인한 바로는 280바이트
+    입력이 1만 자가 되고 중첩 한 단계마다 10배다. 외부 엔티티(file:// 등)는 ParseError로
+    거부되므로 파일 노출은 없고, 문제는 메모리 고갈이다.
+    defusedxml이 있으면 그것을 쓰고, 없으면 DTD가 붙은 문서를 거절한다(RSS·Atom 피드는
+    DTD를 쓰지 않으므로 정상 피드가 걸릴 일은 없다).
+    """
+    if _defused_fromstring is not None:
+        return _defused_fromstring(data)
+    if _DOCTYPE.search(data[:8192]):
+        raise ValueError("DTD가 포함된 XML은 받지 않습니다(엔티티 폭탄 차단)")
+    return ET.fromstring(data)
+
+
+def get_capped(url: str, timeout: float, max_bytes: int = MAX_BYTES, params: dict | None = None) -> bytes:
+    """고정 호스트(GDELT·Google 뉴스·설정에 적힌 피드)에서 본문을 상한까지만 읽는다.
+
+    호스트가 사용자 입력이 아니므로 SSRF 검사는 하지 않지만, 응답 본문은 외부가 정하는
+    값이라 상한은 필요하다. fetch_article만 상한을 두고 이쪽을 비워 두면 같은 구멍이 남는다.
+    """
+    r = requests.get(url, headers=UA, timeout=timeout, params=params, stream=True)
+    try:
+        r.raise_for_status()
+        return _read_capped(r, max_bytes)
+    finally:
+        r.close()
 
 
 def _get_checked(url: str, timeout: float, max_bytes: int = MAX_BYTES,
@@ -164,10 +209,8 @@ def search_news(query: str, max_results: int = 5, timeout: float = 8.0,
     try:
         if err:
             raise RuntimeError("skip")
-        r = requests.get("https://api.gdeltproject.org/api/v2/doc/doc", params=params, headers=UA,
-                         timeout=min(timeout, GDELT_TIMEOUT))
-        r.raise_for_status()
-        arts = (r.json() or {}).get("articles", [])
+        raw = get_capped("https://api.gdeltproject.org/api/v2/doc/doc", min(timeout, GDELT_TIMEOUT), params=params)
+        arts = (json.loads(raw or b"{}") or {}).get("articles", [])
         res = [{"title": a.get("title", ""), "url": a.get("url", ""), "source": a.get("domain", ""),
                 "date": a.get("seendate", "")[:8], "lang": a.get("language", "")} for a in arts[:max_results]]
         if res or start:
@@ -179,9 +222,7 @@ def search_news(query: str, max_results: int = 5, timeout: float = 8.0,
     try:
         hl = "ko" if re.search(r"[가-힣]", query) else "en"
         url = f"https://news.google.com/rss/search?q={quote_plus(query)}&hl={hl}"
-        r = requests.get(url, headers=UA, timeout=timeout)
-        r.raise_for_status()
-        items = ET.fromstring(r.content).findall(".//item")[:max_results]
+        items = parse_xml(get_capped(url, timeout)).findall(".//item")[:max_results]
         res = [{"title": html.unescape(i.findtext("title", "")), "url": i.findtext("link", ""),
                 "source": i.findtext("source", ""), "date": i.findtext("pubDate", "")} for i in items]
         return {"results": res, "engine": "google_news_rss", "error": "; ".join(err) or None}
@@ -239,9 +280,8 @@ def timeline_volume(query: str, start: str | None = None, end: str | None = None
     if not start and not end:
         params["timespan"] = "3months"
     try:
-        r = requests.get("https://api.gdeltproject.org/api/v2/doc/doc", params=params, headers=UA, timeout=timeout)
-        r.raise_for_status()
-        series = (r.json() or {}).get("timeline", [])
+        raw = get_capped("https://api.gdeltproject.org/api/v2/doc/doc", timeout, params=params)
+        series = (json.loads(raw or b"{}") or {}).get("timeline", [])
         data = series[0].get("data", []) if series else []
         pts = [(str(d.get("date", ""))[:8], float(d.get("value", 0) or 0)) for d in data]
         pts = [(f"{d[:4]}-{d[4:6]}-{d[6:8]}", v) for d, v in pts if len(d) == 8]

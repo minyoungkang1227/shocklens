@@ -17,6 +17,7 @@ anthropic>=0.40      # LLM_PROVIDER=anthropic 일 때. openai를 쓰려면 opena
 
 # 입력 도구 (PDF 읽기, 기사 본문 추출은 trafilatura가 있으면 더 정확: pip install trafilatura)
 pypdf>=4
+defusedxml>=0.7      # 외부 RSS/Atom 피드 파싱. 표준 ElementTree는 DTD 엔티티를 그대로 펼친다
 
 # 데모 화면
 streamlit>=1.40

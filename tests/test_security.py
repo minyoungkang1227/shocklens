@@ -240,6 +240,76 @@ def test_daily_watch_listing_line_is_one_safe_line():
     assert line.startswith("[7] (Reuters) China curbs rare earths")
 
 
+# ================================================================== C. XML 엔티티 폭탄
+# xml.etree.ElementTree는 내부 DTD 엔티티를 그대로 펼친다. 외부 엔티티(file://)는 거부되므로
+# 파일 노출은 없고 메모리 고갈이 문제다. 피드 본문은 외부가 정하는 값이라 막아야 한다.
+BOMB = (b'<?xml version="1.0"?>\n<!DOCTYPE rss [\n'
+        b' <!ENTITY a "AAAAAAAAAA">\n'
+        b' <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">\n'
+        b' <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">\n'
+        b' <!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;">\n]>\n'
+        b"<rss><channel><item><title>&d;</title><link>https://ex.com/1</link></item></channel></rss>")
+GOOD = (b"<rss><channel><item><title>China curbs rare earths today</title>"
+        b"<link>https://ex.com/1</link></item></channel></rss>")
+
+
+def test_stdlib_parser_really_expands_entities():
+    """전제 확인. 표준 파서가 더 이상 펼치지 않게 되면 이 테스트부터 다시 본다."""
+    import xml.etree.ElementTree as _ET
+    title = _ET.fromstring(BOMB).findtext(".//title") or ""
+    assert len(title) >= 10_000 and len(BOMB) < 500, "입력 500바이트 미만 -> 1만 자 이상으로 부풀어야 전제가 성립"
+
+
+def test_parse_xml_blocks_entity_bomb():
+    with pytest.raises(Exception) as e:
+        news.parse_xml(BOMB)
+    assert "Entit" in type(e.value).__name__ or "엔티티" in str(e.value) or "DTD" in str(e.value)
+
+
+def test_parse_xml_still_reads_normal_feed():
+    assert news.parse_xml(GOOD).findtext(".//title") == "China curbs rare earths today"
+
+
+def test_parse_feed_blocks_entity_bomb():
+    with pytest.raises(Exception):
+        daily_watch.parse_feed(BOMB, "src")
+    assert daily_watch.parse_feed(GOOD, "src")[0]["title"] == "China curbs rare earths today"
+
+
+def test_search_news_rss_is_capped_and_safe(monkeypatch):
+    """Google 뉴스 RSS 경로도 상한을 두고 안전 파서를 쓴다."""
+    seen = {}
+
+    def _get(url, **kw):
+        seen["stream"] = kw.get("stream")
+        return FakeResp(200, {"Content-Type": "application/xml"}, BOMB)
+    monkeypatch.setattr(news.requests, "get", _get)
+    out = news.search_news("rare earth", timeout=1.0)
+    assert out["results"] == [] and out["error"], "엔티티 폭탄 피드가 결과로 흘러들었다"
+    assert seen["stream"] is True, "본문을 상한 없이 통째로 읽고 있다"
+
+
+def test_get_capped_stops_at_limit(monkeypatch):
+    big = b"<rss>" + b"x" * 5_000_000 + b"</rss>"
+    monkeypatch.setattr(news.requests, "get",
+                        lambda url, **kw: FakeResp(200, {"Content-Type": "application/xml"}, big))
+    raw = news.get_capped("https://news.example.com/f", 1.0, max_bytes=100_000)
+    assert len(raw) == 100_000
+
+
+def test_daily_watch_fetch_goes_through_capped_reader(monkeypatch):
+    """collect()의 기본 fetcher가 상한 읽기를 쓰는지 (stream=True로 확인)."""
+    seen = {}
+
+    def _get(url, **kw):
+        seen["stream"] = kw.get("stream")
+        return FakeResp(200, {"Content-Type": "application/xml"}, GOOD)
+    monkeypatch.setattr(news.requests, "get", _get)
+    heads, errors = daily_watch.collect({"feeds": [{"url": "https://feed.example.com/rss", "name": "f"}]})
+    assert seen["stream"] is True and not errors
+    assert heads and heads[0]["title"] == "China curbs rare earths today"
+
+
 def _feed_title(raw_title: str) -> str:
     xml = (f"<rss><channel><item><title>{raw_title}</title>"
            "<link>https://ex.com/1</link></item></channel></rss>").encode()
