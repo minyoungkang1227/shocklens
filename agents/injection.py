@@ -43,6 +43,15 @@ def sanitize(text: str) -> str:
     return _TAG.sub(" ", text)
 
 
+def suspicious(text: str, limit: int = 3) -> list[str]:
+    """문장 분리 없이 쓰는 간이 검사: 걸린 문구 목록(최대 limit개).
+
+    sanitize() '전' 원문에 걸어야 구획 탈출 시도(</news> 등)까지 잡힌다. 문장 id가 필요한
+    곳(event_analyst)은 scan()을 쓰고, 그렇지 않은 곳(triage·analog·daily_watch)이 이걸 쓴다.
+    """
+    return [m.group(0)[:40] for m in list(_RX.finditer(text or ""))[:limit]]
+
+
 def wrap(numbered_text: str, flagged_ids: list[str]) -> str:
     """뉴스를 데이터 구획에 넣는다. 의심 문장은 구획 안에서도 표시해 둔다."""
     lines = []

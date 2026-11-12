@@ -31,7 +31,7 @@ import yaml
 from engine import textsim
 from pipeline import config
 
-from .injection import SYSTEM_RULE
+from .injection import SYSTEM_RULE, sanitize, suspicious
 from .llm import LLM
 from .triage import rule_triage
 
@@ -153,9 +153,25 @@ def cluster_rule(heads: list[dict], n: int, threshold: float = 0.35) -> list[dic
     return topics[:n]
 
 
+def _listing_line(h: dict) -> str:
+    """헤드라인 한 줄. 제목은 외부 피드 값이므로 구획 태그를 지우고 줄바꿈을 접는다.
+
+    parse_feed가 태그를 지우지만 두 경로가 남는다(2026-11-12 확인).
+      · 이중 이스케이프: XML 파서가 &amp;lt;/news&amp;gt;를 &lt;/news&gt;로 풀면 지울 태그가
+        없고, 그 뒤 html.unescape가 평문 </news>로 되돌린다 -> 구획이 닫힌다.
+      · 줄바꿈 엔티티(&#10;): 제목 안에 줄이 생겨 "[999] (Fake) ..." 같은 가짜 항목을 만들 수
+        있다. 목록이 줄 단위라서 모델이 없는 헤드라인을 있는 것으로 읽는다.
+    """
+    title = re.sub(r"\s+", " ", sanitize(h["title"])).strip()
+    return f"[{h['id']}] ({h['outlet']}) {title}"
+
+
 def pick_topics(heads: list[dict], region_label: str, n: int, llm: LLM | None, threshold: float = 0.35) -> list[dict]:
     if llm is not None and llm.enabled and heads:
-        listing = "\n".join(f"[{h['id']}] ({h['outlet']}) {h['title']}" for h in heads[:150])
+        listing = "\n".join(_listing_line(h) for h in heads[:150])
+        flagged = [h["id"] for h in heads[:150] if suspicious(h["title"])]
+        if flagged:
+            print(f"[daily_watch] 헤드라인 {len(flagged)}건에 지시문 의심 문구: id {flagged[:10]}")
         try:
             r = llm.complete_json(TOPIC_SYSTEM.format(region=region_label, n=n), f"<news>\n{listing}\n</news>",
                                   max_tokens=1500, schema=TOPIC_SCHEMA, name="emit")
