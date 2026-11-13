@@ -26,6 +26,7 @@ flowchart LR
 | 구분 | 에이전트 | LLM | 핵심 산출물 |
 |---|---|---|---|
 | 탐색 | Event Analyst | O (없으면 규칙) | 구조화된 사건 + 근거 문장 id |
+| 검수 | Event Checker (2026-11-13) | O (작은 다른 모델, 없으면 규칙) | 해석 통과/정책 아님/근거 불일치 판정 |
 | 탐색 | Analog Finder | X | 유사 과거 사건, 경로(direct/relaxed/pool/synthetic), 선택 근거 |
 | 탐색 | Exposure Analyst | X | 바스켓별 직접 노출 등급 + 근거 |
 | 계산 | Shock Mapper | X | 팩터 충격 3개 시나리오, 고유충격, 자가 점검 경고 |
@@ -247,9 +248,16 @@ ShockLens의 핵심은 '사건 하나 → 단기 꼬리 손실'이고, 아래 �
 ## 4-7. 정책 사건 아님 출구와 오분류 방어 (fix30, 2026-11-11)
 점검 기록 `docs/checks/shocklens-check-2026-11-11.md`. Event Analyst가 수단 enum에서 무조건 하나를 고르던 구조를 고쳐 `instrument="none"`이면 HQ가 `not_policy`로 끝낸다. 데일리 워치는 토픽과 근거 문장이 다른 이야기면 정량 결과를 보류하고, 유사 사건이 1~2건일 때 시나리오 범위가 한 점으로 모이지 않게 강도 분위수로 넓힌다. 근거 없는 해석은 Reporter 전에 되돌리고, 같은 해석이 반복되면 바로 판단 보류.
 
+## 4-8. 사건 검수관 Event Checker (2026-11-13)
+Event Analyst와 Analog Finder 사이에 한 단계를 더 둔다. 해석한 모델(기본 Sonnet)이 아닌 작은 모델(`llm.checker_model`, 기본 claude-haiku-5-5)과 코드 규칙이 따로 본다. 같은 모델에게 다시 물으면 같은 실수를 반복하기 때문이다.
+- 코드 규칙(항상): 수단 근거 문장이 제목·리드(앞 2문장)에 있으면 통과. 아니면 리드와 근거 문장의 문장 유사도(국가 단어 제외)가 0.1 미만일 때 `off_topic`.
+- 검수 모델(키가 있을 때): 중심 사건이 정책 조치인가 / 근거 문장이 중심 사건을 말하는가 / 수단이 근거와 맞는가. 애매하면 false. 하나라도 실패하면 실패(더 엄격하게).
+- 헤드쿼터: `not_policy` → 정책 사건 아님 종료, `off_topic` → 지적을 전달해 Event Analyst 재해석(LLM 경로만), 같은 해석 반복·재시도 초과 시 판단 보류. 라이브러리·가정 사건은 생략. 검수 모델이 실패하면 규칙 판정만 쓰고 원인을 기록.
+- 설정 `event_check` (enabled, use_llm, lead_sentences, lead_sim_min). 걸러진 비율은 trace의 event_checker 줄로 집계한다.
+
 ## 5. 구현 위치
 
-`agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · 테스트 `tests/test_domestic_daily.py`, `tests/test_security.py`(SSRF·구획 탈출 회귀)
+`agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · `event_checker.py`(사건 검수관) · 테스트 `tests/test_domestic_daily.py`, `tests/test_security.py`(SSRF·구획 탈출 회귀)
 
 ## 2026-11-09 업그레이드 (fix28): 산업 기준 채널 차용 + 반도체 정책 사건 3건
 

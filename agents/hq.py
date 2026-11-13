@@ -22,7 +22,7 @@ import uuid
 
 from langgraph.graph import END, START, StateGraph
 
-from . import (analog_finder, event_analyst, exposure_analyst, news_input, reporter, risk_agent, shock_mapper, triage,
+from . import (analog_finder, event_analyst, event_checker, exposure_analyst, news_input, reporter, risk_agent, shock_mapper, triage,
                verifier)
 from .context import Context
 from .llm import LLM
@@ -81,6 +81,8 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         llm_mode = "reject"
     verifier_llm = _derive(llm, lcfg.get("verifier_model"))      # 작성자(Reporter)와 다른 모델로 검증
     triage_llm = _derive(llm, lcfg.get("triage_model"))
+    ccfg = ctx.thresholds.get("event_check") or {}
+    checker_llm = _derive(llm, lcfg.get("checker_model")) if ccfg.get("use_llm", True) else None   # 해석과 다른 모델로 검수
 
     # ------------------------------------------------------------ 노드
     def n_news_input(state: ShockLensState) -> dict:
@@ -227,6 +229,25 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         return {"status": "partial", "final_brief": head + ("\n\n" + body if body else ""),
                 "trace": _t("hq", "판단 보류 종료", time.time())}
 
+    def n_check(state: ShockLensState) -> dict:
+        """사건 검수관 (2026-11-13): Event Analyst와 다른 모델·코드 규칙으로 해석을 한 번 더 거른다."""
+        t0 = time.time()
+        if state.get("event_preset") or not ccfg.get("enabled", True):
+            c = {"verdict": "pass", "reason": "라이브러리·가정 사건이라 검수 생략" if state.get("event_preset") else "검수 꺼짐",
+                 "mode": "skip"}
+            return {"event_check": c, "trace": _t("event_checker", c["reason"], t0)}
+        flagged = [f["id"] for f in state.get("injection_flags") or []]
+        c = event_checker.check(state["event"], state.get("sentences") or [], checker_llm, ccfg, flagged)
+        upd: dict = {"event_check": c}
+        if c["verdict"] == "not_policy":
+            upd.update(not_policy=True, not_policy_reason=c["reason"])
+        elif c["verdict"] == "off_topic":
+            upd["event_errors"] = [f"사건 검수관 반려: {c['reason']}. 기사 제목·첫 문단의 중심 사건을 근거로 다시 해석하고, "
+                                   f"중심 사건이 정책 조치가 아니면 instrument='none'으로 내세요."]
+        summ = f"{c['verdict']} [{c['mode']}] {c['reason']}" + (f" / LLM 실패: {c['llm_error']}" if c.get("llm_error") else "")
+        upd["trace"] = _t("event_checker", summ, t0)
+        return upd
+
     def n_not_policy(state: ShockLensState) -> dict:
         r = state.get("not_policy_reason", "")
         brief = ("## 정책 사건 아님\n"
@@ -252,9 +273,19 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
         if state.get("event_complete"):
             if not state["event"].get("channels"):
                 return "need_user"
-            return ["analog_finder", "exposure_analyst"]          # 병렬 분기
+            return "event_checker"
         if state["retries"].get("event_analyst", 0) < max_retries:
             return "event_analyst"
+        return "partial_end"
+
+    def gate_check(state: ShockLensState):
+        v = (state.get("event_check") or {}).get("verdict", "pass")
+        if v == "pass":
+            return ["analog_finder", "exposure_analyst"]          # 병렬 분기
+        if v == "not_policy":
+            return "not_policy"
+        if state["retries"].get("event_analyst", 0) < max_retries and state.get("event_mode") == "llm":
+            return "event_analyst"                                 # 지적을 전달해 재해석 (규칙 경로는 다시 돌려도 같다)
         return "partial_end"
 
     def gate_verify(state: ShockLensState):
@@ -271,13 +302,15 @@ def build_graph(ctx: Context, llm: LLM, entry: str = "event_analyst", verify_wit
                      ("shock_mapper", n_shock), ("risk_engine", n_risk), ("reporter", n_reporter),
                      ("verifier", n_verifier), ("finalize", n_finalize), ("partial_end", n_partial),
                      ("need_user", n_need_user), ("news_input", n_news_input), ("triage", n_triage),
-                     ("skipped", n_skipped), ("not_policy", n_not_policy)]:
+                     ("skipped", n_skipped), ("not_policy", n_not_policy), ("event_checker", n_check)]:
         g.add_node(name, fn)
     g.add_edge(START, entry)
     g.add_edge("news_input", "triage")
     g.add_conditional_edges("triage", gate_triage, ["event_analyst", "skipped"])
     g.add_conditional_edges("event_analyst", gate_event,
-                            ["event_analyst", "analog_finder", "exposure_analyst", "need_user", "partial_end", "not_policy"])
+                            ["event_analyst", "event_checker", "need_user", "partial_end", "not_policy"])
+    g.add_conditional_edges("event_checker", gate_check,
+                            ["analog_finder", "exposure_analyst", "not_policy", "event_analyst", "partial_end"])
     g.add_edge(["analog_finder", "exposure_analyst"], "shock_mapper")    # 둘 다 끝나야 합류
     g.add_edge("shock_mapper", "risk_engine")
     g.add_edge("risk_engine", "reporter")

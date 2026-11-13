@@ -122,6 +122,7 @@ class ShockLensState(TypedDict, total=False):
     event_complete: bool
     not_policy: bool                   # Event Analyst가 '정책 사건 아님'으로 판정 (2026-11-11)
     not_policy_reason: str
+    event_check: dict                  # 사건 검수관 판정 {verdict: pass/not_policy/off_topic, reason, mode, lead_sim, llm}
     event_preset: bool                 # 라이브러리 사건으로 바로 시작(뉴스 해석 생략)
     event_errors: list[str]
     event_mode: str                    # llm / rule / preset

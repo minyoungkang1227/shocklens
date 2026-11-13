@@ -80,12 +80,19 @@ llm:
   verifier_model: claude-haiku-5-5   # Verifier 사실 검사는 작성자와 다른(작은) 모델로
   verifier_llm_check: warn           # off / warn(경고만) / reject(반려)
   triage_model: claude-haiku-5-5     # 뉴스 중요도 1차 분류
+  checker_model: claude-haiku-5-5    # 사건 검수관(Event Checker): Event Analyst와 다른 모델로 해석을 한 번 더 거름
   analog_rerank: false               # true면 Analog Finder 상위 후보를 Claude가 재평가 (평가: python -m agents.analog_eval)
 
 attention:
   enabled: true          # 뉴스 입력이면 사건 직전 보도량(GDELT)으로 주의도 측정
   high_percentile: 80    # 이 이상이면 '이미 예상된 사건일 수 있음' 경고
   adjust_surprise: false # true면 주의도가 높을 때 강도 '의외성'을 1 낮춤
+
+event_check:             # (2026-11-13) 사건 검수관: Event Analyst 해석을 코드 규칙 + 다른 모델로 한 번 더 거른다
+  enabled: true
+  use_llm: true          # 작은 모델(llm.checker_model) 판정까지 쓸지. 규칙 판정은 항상
+  lead_sentences: 2      # 제목·리드로 보는 앞 문장 수. 수단 근거가 여기 있으면 규칙 통과
+  lead_sim_min: 0.1      # 근거가 리드 밖이면 리드와의 문장 유사도가 이 이상이어야 통과
 
 triage:
   enabled: true

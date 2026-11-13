@@ -310,3 +310,43 @@ def test_verifier_normal_es_label_ignores_coincident_values():
     assert not any(i["kind"] == "label" for i in v["issues"])
     v2 = verifier.check("## 요약\n평상시 ES는 2.00%입니다 [calc].", {"NORMAL_MC_ES": "2.00%"}, {}, rr, ev)
     assert any(i["kind"] == "label" for i in v2["issues"])          # 겹치지 않으면 여전히 잡는다
+
+
+# ------------------------------------------------------------------ 2026-11-13 사건 검수관 (Event Checker)
+def test_checker_rejects_evidence_outside_lead_and_stops_repeat(ctx):
+    # 젠슨 황 기사에서 마지막 문장(데이터센터 규제)을 근거로 든 해석 -> 검수관 반려 -> 재해석도 같으면 판단 보류
+    draft = {"title": "x", "instrument": "election_shift", "direction": "escalate", "initiator": "US", "target": ["US"],
+             "sectors": ["ai_infra"], "stage": "announce", "channels": {"risk_off": 1, "tech_war": -1},
+             "evidence": {"instrument": ["s4"], "initiator": ["s4"], "target": ["s4"]}}
+    llm = FakeLLM(jsons=[dict(draft), dict(draft), dict(draft)])
+    st = run_news(SCANDAL_NEWS, ctx, llm, force=True)
+    assert st["event_check"]["verdict"] == "off_topic" and st["status"] == "partial"
+    assert not st.get("calc_log_id")                                       # 계산·브리핑까지 가지 않음
+    assert any(t["node"] == "event_checker" for t in st["trace"])
+
+
+def test_checker_passes_lead_evidence(ctx):
+    st = run_news(DC_NEWS, ctx, NoLLM())
+    assert st["event_check"]["verdict"] == "pass" and st["status"] == "ok"
+
+
+def test_checker_llm_not_policy_and_mismatch():
+    from agents import event_checker
+    sents = event_analyst.split_sentences(SCANDAL_NEWS)
+    ev = {"instrument": "tech_export_control", "evidence": {"instrument": ["s1"]}}
+    small = FakeLLM(jsons=[{"central_is_policy": False, "evidence_matches_central": True, "instrument_ok": False,
+                            "reason": "기업 스캔들"}])
+    c = event_checker.check(ev, sents, small)
+    assert c["verdict"] == "not_policy" and c["mode"] == "rule+llm"
+    small2 = FakeLLM(jsons=[{"central_is_policy": True, "evidence_matches_central": True, "instrument_ok": False,
+                             "reason": "수단이 근거와 다름"}])
+    assert event_checker.check(ev, sents, small2)["verdict"] == "off_topic"
+    broken = FakeLLM(jsons=[None])                                         # 검수 모델 실패 -> 규칙 판정만 쓰고 원인 기록
+    c3 = event_checker.check(ev, sents, broken)
+    assert c3["mode"] == "rule" and c3["verdict"] == "pass" and c3.get("llm_error")
+
+
+def test_library_preset_skips_checker(ctx):
+    from agents.hq import run_library_event
+    st = run_library_event("cn_ree_oct_2025", ctx, NoLLM())
+    assert st["event_check"]["mode"] == "skip"
