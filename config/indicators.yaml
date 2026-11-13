@@ -1,0 +1,19 @@
+# 위기·지정학 보조 지수 (2026-11-13 추가). python -m pipeline.indicators 또는 pipeline.run_all 로 받는다.
+# 받지 못해도 전체 흐름은 그대로 돈다(국면 판단은 VIX만으로). 주소가 바뀌면 여기만 고친다.
+
+ofr_fsi:
+  label: OFR 금융스트레스지수 (일별, 글로벌, 0 = 장기 평균, 양수 = 평균 이상 스트레스)
+  # 미 재무부 금융조사국(OFR). 사이트의 'Download all data' CSV. 직링크가 바뀌면 사이트에서 다시 확인해 아래 목록에 추가
+  urls:
+    - https://www.financialresearch.gov/financial-stress-index/data/fsi.csv
+    - https://www.financialresearch.gov/financial-stress-index/files/fsi.csv
+  value_patterns: ["^ofr ?fsi$", "^fsi$", "ofr.*fsi"]     # 지수 열 이름 후보 (대소문자 무시). 구성요소 열은 따로 같이 저장
+  lag_note: 이틀 전 영업일 데이터까지 반영되어 공개됨
+
+ai_gpr:
+  label: AI 지정학 리스크 지수 (Iacoviello·Tong, 일별, 1985~2019 평균 = 100)
+  urls:
+    - https://www.matteoiacoviello.com/ai_gpr_files/ai_gpr_data_daily.csv
+  value_patterns: ["^ai[_ ]?gpr$", "^gpr_ai$", "ai[_ ]?gpr"]
+  component_patterns: ["threat", "act", "oil"]          # 위협·행동·유가 관련 하위 지수가 있으면 같이 저장
+  lag_note: 일별 데이터, 갱신 주기는 사이트 공지 기준(원래 GPR 일별은 매주 월요일)

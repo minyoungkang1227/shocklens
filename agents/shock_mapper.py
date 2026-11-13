@@ -36,7 +36,7 @@ def map_shock(event: dict, analog_ids: list[str], tier: str, exposure: dict, ctx
                "reason": f"가정에 따라 {'위기' if forced == 'crisis' else '평상시'} 국면으로 고정"}
     else:
         reg = regime_mod.decide(event, ctx.levels[ctx.vix_col], th.get("regime", {"mode": "severity"}),
-                                th["severity"]["crisis_regime_min"], asof)
+                                th["severity"]["crisis_regime_min"], asof, getattr(ctx, "stress", None))
     regime = reg["regime"]
     beta = ctx.beta_crisis if regime == "crisis" else ctx.beta_normal
     warnings, flipped, borrowed = [], [], {}

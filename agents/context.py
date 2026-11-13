@@ -30,6 +30,7 @@ class Context:
     vix_col: str = "VIXCLS"
     labels: dict = field(default_factory=dict)   # 바스켓·팩터 한글 이름
     frets: pd.DataFrame | None = None            # 일별 요인 변동 (역스트레스테스트의 공분산 추정)
+    stress: pd.DataFrame | None = None           # 보조 위기 지수 OFR_FSI·AI_GPR (pipeline.indicators, 없으면 None)
 
     @property
     def data_version(self) -> str:
@@ -66,4 +67,13 @@ def load_context(window: str = "react") -> Context:
         vix_col=fac["risk_off"]["series"],
         labels=labels,
         frets=pd.read_parquet(p / "factor_returns.parquet") if (p / "factor_returns.parquet").exists() else None,
+        stress=_load_stress(),
     )
+
+
+def _load_stress():
+    try:
+        from pipeline import indicators
+        return indicators.load()
+    except Exception:
+        return None

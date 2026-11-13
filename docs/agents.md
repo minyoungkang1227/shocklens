@@ -255,6 +255,13 @@ Event Analyst와 Analog Finder 사이에 한 단계를 더 둔다. 해석한 모
 - 헤드쿼터: `not_policy` → 정책 사건 아님 종료, `off_topic` → 지적을 전달해 Event Analyst 재해석(LLM 경로만), 같은 해석 반복·재시도 초과 시 판단 보류. 라이브러리·가정 사건은 생략. 검수 모델이 실패하면 규칙 판정만 쓰고 원인을 기록.
 - 설정 `event_check` (enabled, use_llm, lead_sentences, lead_sim_min). 걸러진 비율은 trace의 event_checker 줄로 집계한다.
 
+## 4-9. 보조 위기 지수: OFR 금융스트레스·AI 지정학 리스크 (2026-11-13)
+VIX는 미국 주식 변동성 하나라서 신용·자금시장에서 시작하는 위기나 지정학 긴장의 누적을 놓칠 수 있다. 두 지수를 보조로 붙였다.
+- 수집 `pipeline/indicators.py` (`python -m pipeline.indicators`, `pipeline.run_all`에 포함): OFR 금융스트레스지수(일별·글로벌, 신용·주식 밸류에이션·자금조달·안전자산·변동성 5개 분야와 미국·기타 선진국·신흥국 지역 구성요소까지 저장, 이틀 전 영업일까지 반영)와 AI-GPR(Iacoviello·Tong, 일별, 위협·행동·유가 하위 지수). 열 이름이 공개되지 않아 날짜 열은 자동 탐지, 지수 열은 `config/indicators.yaml`의 정규식으로 고르고 고른 열을 출력한다. 실패해도 전체 흐름은 VIX만으로 계속.
+- 국면 판단 `engine/regime.decide(stress=...)`: VIX 상위 20% **또는** OFR 최근 5일 평균 상위 20%면 위기(어느 쪽이 근거인지 `triggers`로 남김). AI-GPR은 검증 전이라 기본은 보고만(`regime.stress.gpr_trigger: false`). 보조 지수 최신 값이 VIX 기준일보다 10일 넘게 오래되면 판단에서 제외. 백테스트는 asof 이전 값만 본다.
+- 브리핑의 국면 근거 문장과 데일리 워치 상단 '시장 국면' 줄에 세 지수가 함께 나온다.
+- 남은 일: OFR CSV 직링크는 사이트에서 확인되지 않아 후보 주소 2개로 시도(실패하면 `config/indicators.yaml`에 'Download all data' 주소를 넣으면 됨). AI-GPR을 위기 트리거로 쓸지는 과거 사건 반응과 비교한 뒤 정한다.
+
 ## 5. 구현 위치
 
 `agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · `event_checker.py`(사건 검수관) · 테스트 `tests/test_domestic_daily.py`, `tests/test_security.py`(SSRF·구획 탈출 회귀)

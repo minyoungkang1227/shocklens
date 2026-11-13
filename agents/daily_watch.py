@@ -286,6 +286,8 @@ def render(report: dict, labels: dict) -> str:
     from .reporter import COUNTRY_KO, INST_KO, SECTOR_KO
     L = [f"# ShockLens 데일리 워치 {report['date']}", "",
          f"생성 {report['generated_at']} · 가격 데이터 기준일 {report['data_version']} · 토픽 선택 {report['topic_mode']}"]
+    if report.get("regime_line"):
+        L += ["", f"**시장 국면:** {report['regime_line']}"]
     if report.get("stale_note"):
         L += ["", f"> ⚠ {report['stale_note']}"]
     for reg in report["regions"]:
@@ -360,6 +362,19 @@ def out_path(base: Path, date: str) -> Path:
     return p
 
 
+def market_line(ctx) -> str:
+    """(2026-11-13) 오늘 국면 한 줄: VIX + OFR 금융스트레스 + AI 지정학 리스크. 숫자는 regime.decide 계산 그대로."""
+    try:
+        from engine import regime as regime_mod
+        th = ctx.thresholds
+        r = regime_mod.decide({}, ctx.levels[ctx.vix_col], th.get("regime", {}), th["severity"]["crisis_regime_min"],
+                              None, getattr(ctx, "stress", None))
+        head = "위기" if r["regime"] == "crisis" else "평상시"
+        return f"{head} — {r.get('reason', '')}"
+    except Exception as e:
+        return f"계산 실패({type(e).__name__})"
+
+
 def staleness(data_version: str, today: dt.date, max_days: int) -> str | None:
     try:
         d = dt.date.fromisoformat(data_version)
@@ -392,6 +407,7 @@ def run(regions: list[str] | None = None, analyze_n: int | None = None, force: b
     report = {"date": today.isoformat(), "generated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
               "data_version": ctx.data_version, "topic_mode": "llm" if llm.enabled else "rule", "regions": [],
               "stale_note": staleness(ctx.data_version, today, cfg.get("stale_data_days", 4)),
+              "regime_line": market_line(ctx),
               "track_record_md": record_md}
     for code in (regions or list(cfg["regions"])):
         rc = cfg["regions"][code]

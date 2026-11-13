@@ -71,6 +71,12 @@ regime:
   mode: market           # market = 현재 VIX 분위수로 국면 결정 (기본) / severity = 사건 강도로 결정 (이전 방식)
   crisis_vix_quantile: 0.8    # 최근 VIX가 전체 기간 상위 20% 안이면 위기 국면
   lookback_days: 5            # 최근 n거래일 VIX 평균으로 판단 (하루 튀는 값 방지)
+  stress:                     # (2026-11-13) 보조 지수 (pipeline.indicators로 받음, 없으면 VIX만)
+    ofr: true                 # OFR 금융스트레스지수 최근 평균이 상위 20%면 VIX와 상관없이 위기 (신용·자금시장 경로 위기도 잡음)
+    ofr_quantile: 0.8
+    gpr_trigger: false        # AI 지정학 리스크로도 위기 판정할지. 기본은 보고만 (검증 전)
+    gpr_quantile: 0.9
+    max_stale_days: 10        # 보조 지수 최신 값이 VIX 기준일보다 이만큼 오래되면 판단에서 제외
 
 reporter:
   max_tokens: 8000       # 인용 응답은 인용 원문도 출력 토큰에 포함돼 4000이면 잘릴 수 있음

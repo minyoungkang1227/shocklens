@@ -6,11 +6,15 @@
 4. library   : 사건별 반응 구간 계산 (data/library/events.yaml)
 5. quantiles : 강도 -> 충격 크기 분위수 표
 """
-from . import betas, fetch, library, quantiles, returns
+from . import betas, fetch, indicators, library, quantiles, returns
 
 
 def main() -> None:
     fetch.run()
+    try:
+        indicators.run()          # OFR·AI-GPR 보조 지수. 실패해도 계속 (국면 판단은 VIX만으로)
+    except Exception as e:
+        print(f"[indicators] 건너뜀: {type(e).__name__}: {e}")
     returns.run()
     betas.run()
     library.run()
