@@ -1,9 +1,10 @@
 name: kfin-eval
 
-# ShockLens 엔진이 바뀌면 kfin-eval 리스크 문항의 정답이 달라질 수 있다(kfin-eval은 이 엔진으로 정답을 계산한다).
-# 고정 시드로 문항을 다시 만들어 정답지(kfin-eval/ci/answer_key.json)와 비교한다. 키·모델 호출 없음, 1분 안쪽.
-# 정답이 바뀌면 실패한다. 의도한 변경이면 kfin-eval에서 `python -m kfin_eval ci-key --update`로 정답지를 갱신한다.
-# 참고: ShockLens의 LLM 프롬프트(agents/prompts.py)는 kfin-eval이 아직 평가하지 않는다. 그 점검은 agents/analog_eval·llm_check 몫이다.
+# ShockLens 엔진이 바뀌면 kfin_eval 리스크 문항의 정답이 달라질 수 있다(kfin_eval은 이 엔진으로 정답을 계산한다).
+# 고정 시드로 문항을 다시 만들어 정답지(collatio 저장소의 ci/answer_key.json)와 비교한다. 키·모델 호출 없음, 1분 안쪽.
+# 정답이 바뀌면 실패한다. 의도한 변경이면 collatio 저장소에서 `PYTHONPATH=src python -m kfin_eval ci-key --update`로 정답지를 갱신한다.
+# kfin_eval은 2026-11-23에 collatio 저장소로 합쳐졌다(src/kfin_eval).
+# 참고: ShockLens의 LLM 프롬프트(agents/prompts.py)는 kfin_eval이 아직 평가하지 않는다. 그 점검은 agents/analog_eval·llm_check 몫이다.
 on:
   push:
     branches: [main]
@@ -23,16 +24,17 @@ on:
 jobs:
   answer-key:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+      SHOCKLENS_PATH: ${{ github.workspace }}/shocklens
     steps:
       - uses: actions/checkout@v4
         with: {path: shocklens}
       - uses: actions/checkout@v4
-        with: {repository: minyoungkang1227/kfin-eval, path: kfin-eval}
-      - uses: actions/checkout@v4
         with: {repository: minyoungkang1227/collatio, path: collatio}
       - uses: actions/setup-python@v5
-        with: {python-version: "3.12", cache: pip}
-      - run: pip install numpy pandas scipy pyyaml -r collatio/requirements.txt
-      - name: kfin-eval 정답지 점검 (이 ShockLens 엔진으로)
-        working-directory: kfin-eval
+        with: {python-version: "3.12"}
+      - run: pip install scipy -r collatio/requirements.txt
+      - name: 정답지 점검 (이 ShockLens 엔진으로)
+        working-directory: collatio
         run: python -m kfin_eval ci-key
