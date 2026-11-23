@@ -10,6 +10,8 @@ analog:
     stage: 0.1
   top_k: 10              # 유사 사례로 쓸 최대 사건 수 (가중 분포에 쓰므로 넉넉히)
   text_weight: 0.5       # 점수 = 0.5 x 구조 + 0.5 x 기사 문장 유사도 (기사 텍스트가 있을 때)
+  embed_weight: 0.0      # 문장 유사도 = (1-w) x 단어 + w x 신경망 임베딩(engine/embedsim.py). 0이면 끔. 정답 라벨로 비교 후 정한다
+  embed_model: paraphrase-multilingual-MiniLM-L12-v2   # sentence-transformers 모델 (선택 설치)
   size_classes:          # 충격 크기 등급(강도 기준). 같은 등급끼리만 비교
     small: [1, 2]
     medium: [3]

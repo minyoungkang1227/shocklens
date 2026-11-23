@@ -19,5 +19,8 @@ anthropic>=0.40      # LLM_PROVIDER=anthropic 일 때. openai를 쓰려면 opena
 pypdf>=4
 defusedxml>=0.7      # 외부 RSS/Atom 피드 파싱. 표준 ElementTree는 DTD 엔티티를 그대로 펼친다
 
+# 선택: 신경망 문장 임베딩 층(engine/embedsim.py, 기본 꺼짐). 쓸 때만 설치
+# sentence-transformers>=3.0
+
 # 데모 화면
 streamlit>=1.40

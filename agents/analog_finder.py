@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from engine import analog
 from engine.textsim import CONCEPTS, TextIndex, text_direction
+from engine import embedsim
 
 from .context import Context
 from .injection import SYSTEM_RULE, sanitize, suspicious
@@ -89,6 +90,21 @@ def _text_index(ctx: Context) -> TextIndex:
     return idx
 
 
+def _embed_index(ctx: Context, model: str):
+    """임베딩 색인(캐시). ctx._embed_encoder가 있으면 그것을 쓴다(테스트·다른 백엔드 주입용).
+    실패도 캐시해서 사건마다 모델 로딩을 다시 시도하지 않는다. 반환: (EmbedIndex | None, 실패 사유 | None)."""
+    cache = getattr(ctx, "_embed_cache", None)
+    if cache is not None and cache[0] == model:
+        return cache[1], cache[2]
+    try:
+        enc = getattr(ctx, "_embed_encoder", None) or embedsim.sentence_transformers_encoder(model)
+        out = (embedsim.EmbedIndex(ctx.events, enc), None)
+    except embedsim.EmbeddingUnavailable as e:
+        out = (None, str(e))
+    ctx._embed_cache = (model, *out)
+    return out
+
+
 def _reason(r: dict, ev_lib: dict, overlap: list[str]) -> str:
     hit = [f"{PART_KO[k]} {'일치' if v >= 1 else '일부 일치'}" for k, v in r["parts"].items() if v > 0]
     s = f"{ev_lib.get('date', '')} {ev_lib.get('title', '')} — 구조: " + (", ".join(hit) if hit else "겹침 없음")
@@ -106,6 +122,14 @@ def find(event: dict, ctx: Context, text: str | None = None, use_unclean: bool =
     sims, why, notes = None, {}, []
     if text:
         sims, why, _ = _text_index(ctx).query(text)
+        ew = float(cfg.get("embed_weight", 0.0) or 0.0)
+        if ew > 0:
+            eidx, err = _embed_index(ctx, cfg.get("embed_model", embedsim.DEFAULT_MODEL))
+            if eidx is None:
+                notes.append(f"임베딩 층(embed_weight {ew})을 켰지만 쓸 수 없어 단어 유사도만 썼습니다: {err}")
+            else:
+                sims = embedsim.blend(sims, eidx.query(text), ew)
+                notes.append(f"문장 유사도에 임베딩({eidx.model})을 가중치 {ew}로 섞었습니다.")
         flags = suspicious(text)                    # sanitize 전 원문에 걸어야 구획 탈출 시도도 잡힌다
         if flags:
             notes.append(f"기사에 지시문 의심 문구 {len(flags)}건이 있습니다({', '.join(flags)}). "

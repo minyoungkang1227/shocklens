@@ -100,6 +100,7 @@ python -m agents.llm_check --full  # 전체 에이전트를 LLM 모드로 1회 �
 python -m agents.llm_compare       # LLM 있음/없음 비교: 사건 해석 정확도 + 백테스트 적중률 (결과 data/model/llm_compare.csv)
 python -m agents.llm_compare --n 1 # 강도 자기일관성 끄고 빠르게 (호출 수 약 1/3)
 python -m agents.analog_eval       # Analog Finder 코드 순위 vs Claude 재순위 (정답: data/library/analog_labels.yaml)
+python -m agents.analog_eval --embed 0.3   # + 신경망 문장 임베딩 층을 켠 결과 (pip install sentence-transformers 필요, 첫 실행 때 모델 약 470MB 다운로드)
 ```
 
 ### 4-4) 사건 라이브러리 대량 구축 (GDELT + Claude Batch)

@@ -2,6 +2,7 @@
 
   python -m agents.analog_eval            # 사람 정답(data/library/analog_labels.yaml)과 상위 3건 비교 + 백테스트
   python -m agents.analog_eval --no-bt    # 일치율만
+  python -m agents.analog_eval --embed 0.3   # 임베딩 층(engine/embedsim.py)을 0.3으로 켠 결과를 'embed' 행으로 추가
 
 지표
 - 정답 일치(hit@3): 상위 3건에 사람이 고른 사건이 하나라도 있는 비율
@@ -46,15 +47,30 @@ def overlap(pred: list[str], truth: list[str]) -> dict:
     return {"hit@3": hit > 0, "precision@3": hit / max(len(pred), 1), "recall@3": hit / max(len(truth), 1)}
 
 
-def run(ctx, llm, labels: dict, backtest: bool = True) -> pd.DataFrame:
+def run(ctx, llm, labels: dict, backtest: bool = True, embed: float = 0.0) -> pd.DataFrame:
+    rows = []
+    cfg = ctx.thresholds["analog"]
+    base_ew = cfg.get("embed_weight", 0.0)
+    methods = [("code", None, base_ew), ("rerank", llm, base_ew)]
+    if embed > 0:
+        methods.append(("embed", None, embed))
+    try:
+        rows = _run_rows(ctx, labels, backtest, cfg, methods)
+    finally:
+        cfg["embed_weight"] = base_ew          # 평가 중 바꾼 설정을 되돌린다(예외가 나도)
+    return pd.DataFrame(rows)
+
+
+def _run_rows(ctx, labels, backtest, cfg, methods) -> list[dict]:
     rows = []
     for ev in sorted(ctx.events, key=lambda e: e["date"]):
         if ev.get("clean") is not True:
             continue
         truth = labels.get(ev["id"], [])
-        for method, l in (("code", None), ("rerank", llm)):
+        for method, l, ew in methods:
             if method == "rerank" and (l is None or not l.enabled):
                 continue
+            cfg["embed_weight"] = ew
             r = {"event": ev["id"], "method": method, "has_label": bool(truth)}
             p3 = top3(ev, ctx, l)
             r["top3"] = ",".join(p3)
@@ -70,7 +86,7 @@ def run(ctx, llm, labels: dict, backtest: bool = True) -> pd.DataFrame:
                               "severe_cover": bool(act <= p["severe"]) if ease else bool(act >= p["severe"]),
                               "abs_err": abs(p["central"] - act)})
             rows.append(r)
-    return pd.DataFrame(rows)
+    return rows
 
 
 def summary(df: pd.DataFrame) -> pd.DataFrame:
@@ -96,13 +112,16 @@ def main() -> None:
         pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-bt", action="store_true")
+    ap.add_argument("--embed", type=float, default=0.0, help="0보다 크면 임베딩 층을 이 가중치로 켠 'embed' 행 추가")
     a = ap.parse_args()
     ctx = load_context()
     llm = LLM()
     labels = load_labels()
     n_lab = sum(1 for v in labels.values() if v)
     print(f"정답 라벨 {n_lab}건 ({LABELS.name}), LLM {'있음 ' + llm.model if llm.enabled else '없음 -> 코드 순위만'}")
-    df = run(ctx, llm, labels, not a.no_bt)
+    if n_lab == 0:
+        print("※ 정답 라벨이 0건이라 정답 일치(hit@3)는 계산되지 않습니다. analog_labels.yaml을 먼저 채우세요.")
+    df = run(ctx, llm, labels, not a.no_bt, a.embed)
     print(df.drop(columns=[c for c in ("has_label",) if c in df]).to_string(index=False))
     print("\n=== 요약 ===")
     print(summary(df).to_string(float_format=lambda x: f"{x:.2f}"))
