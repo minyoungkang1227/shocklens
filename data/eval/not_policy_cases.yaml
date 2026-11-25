@@ -1,0 +1,114 @@
+# '정책 사건 아님' 회귀 사례 — Event Analyst·Event Checker가 시장 이벤트를 정책 사건으로 잘못 읽지 않는지 본다.
+# 사건 라이브러리(events.yaml)는 정책 사건만 받으므로 이런 헤드라인은 여기에 모은다.
+#
+# 기대값
+#   llm: LLM 경로에서 기대하는 결과. not_policy = 정책 사건 아님 출구, hold = 판단 보류(partial)
+#   rule: 규칙 경로 기대값. fix31 이후 규칙 경로는 '정책 아님'을 단정하지 않고 판단 보류(hold)로 끝난다
+# 출처: 2026-11-12 4건은 프로젝트 문서 claude/not_policy_cases_2026-11-12.yaml, 나머지 7건은 2026-11-25 라이브러리 업데이트 정리.
+
+cases:
+  # ---- 2026-11-12 (fix30 재발 방지)
+  - id: np_nvda_ceo_oust_2026_11_11
+    date: "2026-11-11"
+    lang: en
+    text: "Nvidia board prepares to oust CEO Jensen Huang; shares fall 8% after hours"
+    expect: {llm: not_policy, rule: hold}
+    trap: >
+      같은 기사 안에 '중국 스파이 연루 조사' 문장이 있으면 수출통제나 제재로 끌려갈 수 있다.
+      근거 문장이 '조사설'뿐이면 not_policy가 맞다.
+    source: https://www.stocktitan.net/articles/stock-market-today-live-november-11-2026
+
+  - id: np_nvda_ceo_oust_2026_11_11_ko
+    date: "2026-11-12"
+    lang: ko
+    text: "엔비디아 이사회 젠슨 황 해임 검토 보도에 시간외 8%대 급락…코스피 반도체주 수급 흔들"
+    expect: {llm: not_policy, rule: hold}
+    trap: >
+      한국어 시황 기사에는 지난주 미국 AI 데이터센터 규제 문장이 같이 붙는 경우가 많다(11/11 오분류의 원인 s7).
+      토픽-근거 유사도 검사(topic_match_min 0.1)도 함께 확인한다.
+    source: https://www.sedaily.com/article/20113582
+
+  - id: np_coreweave_earnings_2026_11_11
+    date: "2026-11-11"
+    lang: en
+    text: "CoreWeave jumps 24% after earnings beat and raised 2026 revenue forecast; chip stocks rally"
+    expect: {llm: not_policy, rule: hold}
+    trap: "'chip'이 CHIPS법(industrial_subsidy)으로 읽히지 않는지 확인한다(fix31에서 고친 버그)."
+    source: https://finance.yahoo.com/markets/stocks/articles/major-us-stock-indexes-fared-211834867.html
+
+  - id: np_cpi_hike_odds_2026_11_11
+    date: "2026-11-11"
+    lang: en
+    text: "Hot October CPI pushes Fed December rate hike odds to 90%"
+    expect: {llm: not_policy, rule: hold}
+    trap: >
+      금리 결정과 물가 지표는 프롬프트 기준상 '시장 이벤트'다. 'Fed'를 정부 기관으로 보고 US의 정책 수단을 고르면 오답.
+      동시발생 충격(거시 키워드) 목록에는 잡혀야 한다.
+    source: https://www.stocktitan.net/articles/stock-market-today-live-november-11-2026
+
+  # ---- 2026-11-25 추가
+  - id: np_nvda_huang_resign_megaspeed_2026_11_13
+    date: "2026-11-13"
+    lang: en
+    text: "Nvidia CEO Jensen Huang resigns amid probe into AI chip diversion to China via Megaspeed; Treasury pushes Entity List listing"
+    expect: {llm: hold, rule: hold}
+    trap: >
+      경계 사례. 11/15 브리핑은 정책 사건(수출통제)으로 분류했지만 Entity List 등재는 '주장·대립' 단계였고
+      실제 정부 조치는 없었다. 사임은 not_policy, 등재 주장은 근거 부족 -> hold가 기대값.
+      실제 등재 발표가 나오면 그 발표를 별도 정책 사건 후보로 만든다.
+    source: https://aiweekly.co/alerts/bessent-confronts-lutnick-over-megaspeed-entity-list-delay
+
+  - id: np_nvda_no_return_2026_11_16
+    date: "2026-11-16"
+    lang: en
+    text: "Nvidia board not considering Jensen Huang's return as CEO amid Megaspeed chip-diversion probe; chip stocks slide, KOSPI falls 3.6%"
+    expect: {llm: not_policy, rule: hold}
+    trap: "'probe'·'chip-diversion'이 tech_export_control로 끌려가지 않는지. 오늘 계기는 이사회 결정(경영)이다."
+    source: https://www.fnnews.com/news/202611170620543776
+
+  - id: np_nvda_china_hopper_zero_2026_11_18
+    date: "2026-11-18"
+    lang: en
+    text: "Nvidia halts China Hopper data center shipments, guides zero China revenue"
+    expect: {llm: not_policy, rule: hold}
+    trap: >
+      수출통제처럼 읽히지만 새 사건이 아니다. 중국향 호퍼 출하 0은 2026년 5월 실적 때부터 이어진 상태이고,
+      원인은 미국 허가와 중국의 수입 보류가 겹친 것(11/19 확인 메모). 실적 가이던스 문장이 근거이면 not_policy.
+    source: docs/briefs/morning-brief-2026-11-19.md
+
+  - id: np_old_measure_rementioned_2026_11_16
+    date: "2026-11-16"
+    lang: ko
+    text: "상무부의 AI칩 우회 조달 차단 여파에 반도체주 약세"
+    expect: {llm: not_policy, rule: hold}
+    trap: >
+      이 조치는 2026-06-01 발표된 기존 지침이다(11/17 확인 메모). 오래된 정책을 다시 언급한 시황 문장이 새 사건으로
+      잡히면 안 된다. 라이브러리 빌더의 중복 제거(±3일)로는 못 거르므로 Event Analyst 단계에서 막아야 한다.
+      주의: 같은 날 BIS의 새 원격접근 규칙(us_bis_dc_remote_ai_2026 후보)도 나왔다. 문장에 '원격 접근·제3국 데이터센터·임시 최종 규칙'이 있으면 새 사건이다.
+    source: https://thenextweb.com/news/us-nvidia-amd-china-subsidiary-chip-curbs
+
+  - id: np_nvda_sec_accounting_2026_11_20
+    date: "2026-11-20"
+    lang: en
+    text: "Nvidia plunges 14% on report SEC is reviewing its accounting; Nasdaq falls 5.3%"
+    expect: {llm: not_policy, rule: hold}
+    trap: "SEC의 개별 기업 회계 검토를 domestic_regulation으로 읽으면 오답. 규제 '제도'가 아니라 집행·조사 보도다."
+    source: https://www.tradingkey.com/analysis/stocks/us-stocks/262316111-nasdaq-falls-ai-stock-selloff-nvidia-sec-probe-tradingkey
+
+  - id: np_nvda_huang_reinstated_2026_11_23
+    date: "2026-11-24"
+    lang: ko
+    text: "젠슨 황 엔비디아 CEO 복귀에 뉴욕증시 폭등…코스피 매수 사이드카, 5000선 회복"
+    expect: {llm: not_policy, rule: hold}
+    trap: >
+      한국어 시황 기사에 '12월 3일 상원 청문회', '대중국 수출통제'가 하락 원인으로 같이 붙어 있다(이투데이).
+      청문회·과거 통제 문장이 근거로 쓰이면 오분류. 방향도 반대(완화)로 읽힐 수 있으니 확인한다.
+    source: https://supple.kr/news/cmwv6uman04s9kwp8pcbiw7su
+
+  - id: np_fed_hike_95_2026_11_24
+    date: "2026-11-24"
+    lang: en
+    text: "Traders price 95% odds of a 25bp Fed hike in December ahead of PCE; chip stocks reverse"
+    expect: {llm: not_policy, rule: hold}
+    trap: "np_cpi_hike_odds와 같은 유형의 영어 변형. 동시발생 충격(거시 키워드)에는 잡혀야 한다."
+    source: https://finance.yahoo.com/markets/live/stock-market-today-tuesday-november-24-dow-sp-500-nasdaq-chip-stocks-nvidia-140629923.html

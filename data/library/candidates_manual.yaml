@@ -1,0 +1,136 @@
+# 사람이 고른 정책 사건 후보 (아침 브리핑 2026-11-12 ~ 11-25 기준). 정리일: 2026-11-25.
+#
+# 아직 events.yaml에 넣지 않는다.
+# - 2026-11-23 방향 문서 기준, 실전 성적표가 30건 쌓이기 전에는 엔진 숫자를 바꾸지 않는다.
+# - events.yaml이 바뀌면 유사 사건 결과가 바뀌고 kfin-eval CI가 깨진다. 편입할 때는 collatio 정답지도 같이 갱신한다.
+# - 이 파일은 pipeline/library_builder.py가 덮어쓰는 candidates.yaml과 다른 파일이다(그 파일은 fetch 때마다 새로 쓰인다).
+#
+# 어휘는 agents/state.py에 맞췄다(INSTRUMENTS, SECTORS, STAGES).
+# 채널 부호는 기존 사건과 맞췄다.
+#   - tech_war = SOXX - SPY. 미국 대중 수출통제 확대면 반도체가 상대적으로 약하므로 -1.
+#   - cny = USD/CNY. 위안 약세면 +1.
+# 강도 6요소(severity_components)는 비워 둔다. 사후 채점 편향을 막으려고 relabel_severity(블라인드)로 채운다.
+# 날짜·시각에 '확인 필요'가 붙은 항목은 편입 전에 원문으로 확인한다.
+
+candidates:
+  - id: us_bis_dc_remote_ai_2026
+    date: "2026-11-16"
+    react_from: "2026-11-17"      # 11/16(월) 발표. 미국 장중 발표인지 확인 필요. 한국 반응은 11/17
+    title: 미국 BIS, 중국 기업의 제3국 데이터센터 경유 첨단 AI칩 원격 사용 제한 (임시 최종 규칙)
+    instrument: tech_export_control
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [semiconductor, ai_infra]
+    stage: enforce                # 임시 최종 규칙, 11/19 관보 게재와 함께 발효
+    channels: {tech_war: -1, risk_off: 1, cny: 1}   # us_ai_diffusion_2025·us_h20_2025와 같은 부호
+    severity_components: null
+    clean: false
+    confounder_type: other        # 검수 쟁점: 엔비디아 경영 공백, 세미애널리시스 수요 하향(-19%/-28%)이 겹침
+    priority: high
+    why: 가장 최근의 미국 대중 수출통제. us_ai_diffusion_2025와 같은 계열이라 유사 사건 검증에 바로 쓰인다.
+    description: >
+      원격 접근(클라우드 임대)을 처음으로 수출통제 대상에 넣었다. 인도네시아·말레이시아·싱가포르·태국·브라질로
+      첨단 반도체를 보낼 때 허가가 필요하다(미국 본사 수령자는 보고 조건으로 면제). 2025년 AI 확산 규칙은 공식 폐지.
+      11/11 디인포메이션이 '마무리 단계'라고 먼저 보도해 일부가 선반영됐을 수 있다.
+      11/17 코스피 4968.48(-2.59%), S&P500 -1.0%, 나스닥 -0.7%.
+    sources:
+      - https://www.cbsnews.com/news/nvidia-jensen-huang-commerce-department-limit-remote-access-ai-chips/
+      - https://www.datacenterdynamics.com/en/news/us-dept-of-commerce-issues-rule-to-restrict-remote-access-to-advanced-ai-chips/
+      - https://cellcog.ai/blog/ai-chip-remote-access-rule/
+      - docs/briefs/morning-brief-2026-11-18.md, morning-brief-2026-11-19.md (확인 메모)
+
+  - id: us_cms_ma_audit_2026
+    date: "2026-11-18"            # 확인 필요: 규칙안 공개일·시각
+    react_from: "2026-11-18"      # 장 마감 후 발표면 11-19
+    title: 미국 CMS, 메디케어 어드밴티지 감사 오류를 계약 전체로 소급 확대하는 규칙안 (CRUSH)
+    instrument: domestic_regulation
+    direction: escalate
+    initiator: US
+    target: [US]
+    sectors: []                   # 헬스케어(보험)는 산업 어휘에 없다. pharma와는 다른 업종이라 비워 둠. 어휘 추가는 엔진 변경 -> 성적표 30건 뒤
+    stage: announce               # 규칙안(제안). 의견 수렴 2027-01-19까지
+    channels: {risk_off: 1}       # 주의: domestic_regulation 기본 채널은 tech_war -1을 붙인다. 헬스케어 사건에는 맞지 않으므로 편입 때 확인
+    severity_components: null
+    clean: false
+    confounder_type: macro        # 같은 날 매파적 FOMC 의사록
+    priority: medium
+    why: >
+      미국 국내 규제의 업종 특화 사례. 지금 clean한 국내 규제 사건은 모두 중국이라는 한계를 일부 메운다.
+      다만 헬스케어 바스켓이 없어 효과는 미국 주식(SPY) 고유충격 안에서 희석된다.
+    description: >
+      2023년 RADV 소급 규칙이 2025-09 법원에서 무효화된 뒤 다시 추진하는 규칙안. UNH -10.21%, HUM -13.04%.
+    sources:
+      - https://www.beckershospitalreview.com/legal-regulatory-issues/cms-targets-90b-in-savings-with-sweeping-new-anti-fraud-rule/
+      - https://www.beckerspayer.com/?p=30579
+      - docs/briefs/morning-brief-2026-11-19.md
+
+  - id: kr_cn_fta_services_2026
+    date: "2026-11-19"
+    react_from: "2026-11-19"      # 확인 필요: 발표 시각
+    title: 한·중 FTA 서비스·투자 후속협상 실질 타결 (중국, 한국 영화·게임 최혜국 대우)
+    instrument: tariff_pause      # 무역협정·시장개방 전용 수단이 없다. 완화 계열(tariff_pause)로 둔 초안. 검수 쟁점
+    direction: ease
+    initiator: CN
+    target: [KR]
+    sectors: []                   # 콘텐츠·관광은 산업 어휘에 없음
+    stage: ease
+    channels: {}                  # 팩터 7개로 잡히는 경로가 약함. 영향은 중국 2% 바스켓 안
+    severity_components: null
+    clean: null                   # 같은 날 엔비디아 실적 반등. 판정 필요
+    confounder_type: null
+    priority: low
+    why: 완화 방향 사건이 적어 표본 가치는 있으나 포트폴리오 영향이 작다.
+    sources:
+      - docs/briefs (11/19 장 마감 업데이트, 디지털데일리)
+
+  - id: us_senate_dc_grid_cost_2026
+    date: "2026-11-20"            # 확인 필요: 상원 최종 표결일(62:33). 11/10 전후 절차 표결(73:25)이 먼저 있었다
+    react_from: "2026-11-20"
+    title: 미 상원, 대형 데이터센터에 전력망 증설 비용을 부담시키는 법안 통과 (62:33, 하원 남음)
+    instrument: domestic_regulation
+    direction: escalate
+    initiator: US
+    target: [US]
+    sectors: [ai_infra, utilities]
+    stage: announce               # 하원 통과·서명 전. 확정되면 별도 사건(enforce)으로
+    channels: {tech_war: -1, risk_off: 1}   # domestic_regulation 기본 채널과 같음(us_midterm_2026과 같은 부호)
+    severity_components: null
+    clean: false
+    confounder_type: other        # 같은 날 엔비디아 SEC 회계 검토 보도(-14.01%). 반응 분리가 어려움
+    priority: medium
+    why: >
+      us_midterm_2026(AI 데이터센터 규제 우려)의 후속 단계. 절차 표결이 열흘 전에 있어 의외성은 낮다.
+      하원 통과·서명 시점이 더 깨끗한 사건이 될 수 있다.
+    description: 11/20 나스닥 -5.28%, SOX -10.73%, 코스피 -5.21%. 반응 대부분은 엔비디아 SEC 보도일 가능성이 높다.
+    sources:
+      - https://www.aljazeera.com/news/2026/11/10/us-senate-advances-major-bill-boosting-energy-infrastructure
+      - docs/briefs/morning-brief-2026-11-23.md (세계일보, 파이낸셜뉴스, TradingKey)
+
+  - id: us_cn_dc_equipment_import_2026
+    date: null                    # 공식 발표 없음. 2026-08-05 Reuters가 FCC 초안 작성을 처음 보도
+    react_from: null
+    title: 미국 FCC, 중국산 데이터센터 장비(광트랜시버) 신규 모델 수입 금지 추진
+    instrument: tariff            # 수입 금지 전용 수단이 없다. 검수 쟁점
+    direction: escalate
+    initiator: US
+    target: [CN]
+    sectors: [ai_infra, telecom]
+    stage: announce
+    channels: {tech_war: -1, cny: 1}
+    severity_components: null
+    clean: false
+    confounder_type: other
+    priority: low
+    why: 아직 '초안·추진' 단계다. 공식 규칙 발표일이 나오면 그날을 사건 날짜로 다시 쓴다.
+    sources:
+      - https://www.thestandard.com.hk/finance/article/339031/Trump-administration-drafting-ban-on-Chinese-data-center-devices-sources-say
+      - docs/briefs/morning-brief-2026-11-18.md
+
+# 지켜볼 것 — 정책 사건으로 바뀌면 후보로 올린다
+watch:
+  - "Megaspeed Entity List 등재: 실제 BIS 발표가 나오면 entity_list 후보. 상원 청문회 12/3·12/10."
+  - "상원 데이터센터 전력비용 법안: 하원 통과·서명 시점을 enforce 단계 사건으로."
+  - "CMS 규칙안: 의견 수렴 2027-01-19 종료 후 최종 규칙 발표 시점."
+  - "중국산 광트랜시버 수입 금지: FCC 공식 발표 문서와 날짜."
+  - "11/24 기사에 '대중국 수출통제'가 하락 원인으로 다시 언급됨. BIS 11/16 규칙 외 다른 조치인지 모름."
