@@ -403,7 +403,7 @@ def run(regions: list[str] | None = None, analyze_n: int | None = None, force: b
     n_top, n_an = cfg.get("topics_per_region", 3), cfg.get("analyze_per_region", 1) if analyze_n is None else analyze_n
     from . import track_record
     scored = track_record.score_all(ctx)                # 지난 예측 중 반응 창이 끝난 것을 먼저 채점
-    record_md = track_record.report_md(scored, len(track_record.load()) - len(scored))
+    record_md = track_record.report_md(scored, track_record.pending_count(scored))
     report = {"date": today.isoformat(), "generated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
               "data_version": ctx.data_version, "topic_mode": "llm" if llm.enabled else "rule", "regions": [],
               "stale_note": staleness(ctx.data_version, today, cfg.get("stale_data_days", 4)),

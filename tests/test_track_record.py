@@ -48,3 +48,26 @@ def test_record_score_roundtrip(ctx, tmp_path, monkeypatch):
 def test_skipped_runs_are_not_recorded():
     assert tr.make_record({"status": "skipped", "risk_result": {}}, "x") is None
     assert tr.make_record({"status": "partial", "risk_result": {"scenario_loss": {}}}, "x") is None
+
+
+def test_excluded_records_stay_in_file_but_leave_the_score(ctx, tmp_path, monkeypatch):
+    """오분류 기록은 forecasts.jsonl에서 지우지 않고 excluded.yaml로 집계에서만 뺀다(2026-11-27)."""
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    st = run_news(REE_NEWS, ctx, NoLLM())
+    now = dt.datetime(2026, 10, 20, 8, 0, tzinfo=ET)
+    rec = tr.make_record(st, "test", dt.date(2026, 10, 20), now)
+    bad = tr.make_record({**st, "calc_log_id": "calc_bad"}, "test", dt.date(2026, 10, 20), now)
+    tr.append(rec), tr.append(bad)
+    assert len(tr.score_all(ctx)) == 2
+    (tmp_path / "forecasts" / "excluded.yaml").write_text(
+        "excluded:\n  - id: calc_bad\n    reason: 오분류\n", encoding="utf-8")
+    df = tr.score_all(ctx)
+    assert list(df["id"]) == [rec["id"]] and len(tr.load()) == 2                   # 기록은 남고 채점에서만 빠진다
+    assert tr.pending_count(df) == 0                                               # 제외한 건은 '대기'로도 세지 않는다
+    md = tr.report_md(df, 0)
+    assert "집계 제외 1건" in md and "calc_bad (오분류)" in md
+
+
+def test_repo_excluded_file_marks_nov10_misclassification():
+    ex = tr.load_excluded(config.DATA_DIR / "forecasts")
+    assert "calc_20261111_113846_96260f" in ex and "오분류" in ex["calc_20261111_113846_96260f"]

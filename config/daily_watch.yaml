@@ -21,7 +21,7 @@ regions:
 
 max_headlines_per_feed: 40
 topics_per_region: 3         # 지역마다 보고할 상위 토픽 수
-analyze_per_region: 1        # 그중 ShockLens 정량 분석까지 돌릴 토픽 수 (정책 사건만, 1개당 수십 초)
+analyze_per_region: 2        # 그중 ShockLens 정량 분석까지 돌릴 토픽 수 (정책 사건만, 1개당 수십 초). 2026-11-27 1->2: 정책 사건 토픽이 한도 밖으로 밀리는 일이 있어서
 cluster_threshold: 0.35      # 규칙 경로: 헤드라인 문장 유사도가 이 이상이면 같은 토픽
 fetch_article: true          # 토픽 대표 기사 본문을 가져와 분석 (실패하면 헤드라인 묶음으로)
 stale_data_days: 4           # 가격 데이터가 이 영업일 이상 오래되면 경고 (--refresh로 갱신)

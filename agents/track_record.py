@@ -26,6 +26,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
+import yaml
 import pandas as pd
 
 from engine import risk
@@ -117,6 +118,22 @@ def load(path: Path | None = None) -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
+def load_excluded(folder: Path | None = None) -> dict[str, str]:
+    """채점 집계에서 뺄 기록 {id: 사유}. forecasts.jsonl은 추가만 하는 기록이라 지우지 않고 여기서 표시한다.
+    예: fix30 전에 정책 사건이 아닌 뉴스를 정책 사건으로 읽어 기록된 예측."""
+    p = (folder or forecast_dir()) / "excluded.yaml"
+    if not p.exists():
+        return {}
+    items = (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("excluded") or []
+    return {str(it["id"]): str(it.get("reason", "")) for it in items}
+
+
+def pending_count(scored: pd.DataFrame, path: Path | None = None) -> int:
+    """반응 창 대기 건수 = 기록 - 채점 - 집계 제외."""
+    ex = load_excluded(path.parent if path else None)
+    return len([r for r in load(path) if r["id"] not in ex]) - len(scored)
+
+
 def realized(rec: dict, rets: pd.DataFrame, weights: pd.Series, days: int = 3) -> dict | None:
     """반응 창 실제 수익률. 창이 데이터에 다 안 들어왔으면 None."""
     i0 = rets.index.searchsorted(pd.Timestamp(rec["window_start"]))
@@ -161,8 +178,9 @@ def score_all(ctx, path: Path | None = None) -> pd.DataFrame:
     """기록된 예측 중 채점 가능한 것을 모두 채점해 scored.csv로 저장. 아직 창이 안 끝난 예측은 건너뛴다."""
     days = ctx.thresholds["event_window"]["react_days"]
     rows = []
+    excluded = load_excluded(path.parent if path else None)
     for rec in load(path):
-        if rec.get("central") is None:
+        if rec.get("central") is None or rec["id"] in excluded:
             continue
         real = realized(rec, ctx.rets, ctx.weights, days)
         if real is not None:
@@ -189,8 +207,10 @@ def summary(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def report_md(df: pd.DataFrame, n_pending: int) -> str:
-    L = [f"채점 {len(df)}건 · 반응 창 대기 {n_pending}건"]
+def report_md(df: pd.DataFrame, n_pending: int, excluded: dict[str, str] | None = None) -> str:
+    excluded = load_excluded() if excluded is None else excluded
+    head = f"채점 {len(df)}건 · 반응 창 대기 {n_pending}건"
+    L = [head + (f" · 집계 제외 {len(excluded)}건" if excluded else "")]
     if df.empty:
         L.append("아직 채점할 수 있는 예측이 없습니다 (반응 창 3거래일이 가격 데이터에 들어오면 채점).")
         return "\n".join(L)
@@ -207,6 +227,8 @@ def report_md(df: pd.DataFrame, n_pending: int) -> str:
         L.append(f"| {r['news_date']} | {str(r['title'])[:28]} | {'순수' if r['pure'] else '사후'} | {r['central']:+.2%} | "
                  f"{r['severe']:+.2%} | {r['band_lo']:+.2%} ~ {r['band_hi']:+.2%} | {r['actual']:+.2%} | "
                  f"{'O' if r['in_band'] else 'X'} |")
+    if excluded:
+        L += ["", "집계 제외: " + "; ".join(f"{k} ({v})" for k, v in excluded.items())]
     L += ["", "'사후 해석'은 기록 시점에 반응 창 첫날 장이 이미 열린 예측입니다(아침 브리핑이 전날 미국 장 뉴스를 다룰 때). "
           "모델 실력은 '순수 예측' 행으로 판단하세요."]
     return "\n".join(L)
@@ -235,7 +257,7 @@ def main() -> None:
         for r in load():
             print(f"{r['news_date']} {r['id']} {'순수' if r['pure'] else '사후'} {r['source']:12s} {r['title'][:40]}")
     df = score_all(ctx)
-    print(report_md(df, len(load()) - len(df)))
+    print(report_md(df, pending_count(df)))
     print(f"\n데이터 기준일 {ctx.data_version} · 저장 {forecast_dir() / 'scored.csv'}")
 
 
