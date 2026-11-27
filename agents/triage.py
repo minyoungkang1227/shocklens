@@ -3,7 +3,7 @@
 판정: relevant(지경학 정책 사건인가) + importance 1~5 + 이유 한 줄
   importance < min_importance 이거나 relevant=false 이면 헤드쿼터가 전체 분석을 생략하고 'skipped'로 끝낸다.
   사용자가 강제 실행(force)을 고르면 분류와 상관없이 진행한다.
-LLM이 없으면 키워드 규칙으로 판정한다 (정책 수단 단어 + 국가 단어 수).
+LLM이 없으면 학습 분류기(triage.learned, 켜져 있을 때) -> 키워드 규칙(정책 수단 단어 + 국가 단어 수) 순서로 판정한다.
 사건 라이브러리 대량 구축(library_builder)에서도 같은 함수로 기사를 먼저 거른다.
 """
 from __future__ import annotations
@@ -51,12 +51,40 @@ def rule_triage(text: str) -> dict:
             "reason": f"정책 단어 {pol}종·국가 {cty}개{' ·확대 표현' if big else ''} (규칙 판정)"}
 
 
-def classify(text: str, llm: LLM | None = None) -> dict:
-    """반환: {relevant, importance, reason, mode(llm/rule), model, injection_flags}
+def _learned_cfg() -> dict:
+    try:
+        from pipeline import config
+        return (config.thresholds().get("triage") or {}).get("learned") or {}
+    except Exception:
+        return {}
 
+
+def _fallback(text: str, flags: list[str], note: str = "", learned_cfg: dict | None = None) -> dict:
+    """LLM이 없거나 실패했을 때: 학습 분류기(켜져 있고 모델 파일이 있으면) -> 키워드 규칙. (2026-11-27)"""
+    from . import triage_model
+    model, err = triage_model.get_learned(_learned_cfg() if learned_cfg is None else learned_cfg)
+    if model is not None:
+        try:
+            out = model.classify(text)
+            out["reason"] = _with_flags(out["reason"] + note, flags)
+            return {**out, "mode": "model", "model": model.meta.get("model"), "injection_flags": flags}
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:80]}"
+    out = rule_triage(text)
+    if err:
+        note += f" / 학습 분류기 사용 불가: {err}"
+    out["reason"] = _with_flags(out["reason"] + note, flags)
+    return {**out, "mode": "rule", "model": None, "injection_flags": flags}
+
+
+def classify(text: str, llm: LLM | None = None, learned_cfg: dict | None = None) -> dict:
+    """반환: {relevant, importance, reason, mode(llm/model/rule), model, injection_flags}
+
+    순서: LLM(Haiku) -> 학습 분류기(triage.learned, 기본 꺼짐) -> 키워드 규칙.
     text는 외부 기사 본문이다. 구획(<news>)에 넣기 전에 sanitize()로 닫는 태그를 지운다.
     지우지 않으면 본문의 </news> 한 줄로 구획을 빠져나와 분류자에게 직접 지시할 수 있다
     (주입 문구는 importance를 올려 전체 파이프라인을 태우거나, 내려 사건을 묻을 수 있다).
+    learned_cfg: 테스트·평가용으로 설정을 직접 넘길 때. None이면 config/thresholds.yaml의 triage.learned.
     """
     flags = suspicious(text)
     if llm is not None and llm.enabled:
@@ -68,19 +96,12 @@ def classify(text: str, llm: LLM | None = None) -> dict:
                 return {"relevant": bool(r.get("relevant", True)), "importance": imp,
                         "reason": _with_flags(str(r.get("reason", ""))[:120], flags),
                         "mode": "llm", "model": getattr(llm, "model", ""), "injection_flags": flags}
-            out = rule_triage(text)                       # (2026-11-11) 빈 응답도 원인을 남긴다
-            meta = getattr(llm, "last_meta", {}) or {}
-            out["reason"] += f" / LLM 응답 없음({meta.get('stop_reason', '?')}, 모델 {getattr(llm, 'model', '?')})"
-            out["reason"] = _with_flags(out["reason"], flags)
-            return {**out, "mode": "rule", "model": None, "injection_flags": flags}
+            meta = getattr(llm, "last_meta", {}) or {}           # (2026-11-11) 빈 응답도 원인을 남긴다
+            return _fallback(text, flags, f" / LLM 응답 없음({meta.get('stop_reason', '?')}, 모델 {getattr(llm, 'model', '?')})",
+                             learned_cfg)
         except Exception as e:
-            out = rule_triage(text)
-            out["reason"] += f" / LLM 실패: {type(e).__name__}: {str(e)[:80]}"
-            out["reason"] = _with_flags(out["reason"], flags)
-            return {**out, "mode": "rule", "model": None, "injection_flags": flags}
-    out = rule_triage(text)
-    out["reason"] = _with_flags(out["reason"], flags)
-    return {**out, "mode": "rule", "model": None, "injection_flags": flags}
+            return _fallback(text, flags, f" / LLM 실패: {type(e).__name__}: {str(e)[:80]}", learned_cfg)
+    return _fallback(text, flags, "", learned_cfg)
 
 
 def passes(t: dict, min_importance: int) -> bool:

@@ -33,7 +33,7 @@ from tools.news import get_capped, parse_xml
 
 from .injection import SYSTEM_RULE, sanitize, suspicious
 from .llm import LLM
-from .triage import rule_triage
+from . import triage as triage_mod
 
 TOPIC_SCHEMA = {"type": "object", "properties": {"topics": {"type": "array", "items": {
     "type": "object", "properties": {
@@ -140,12 +140,12 @@ def cluster_rule(heads: list[dict], n: int, threshold: float = 0.35) -> list[dic
     for members in clusters:
         hs = [heads[j] for j in members]
         text = " ".join(h["title"] for h in hs)
-        tri = rule_triage(text)
+        tri = triage_mod.classify(text)          # LLM 없이: 학습 분류기(켜져 있으면) -> 규칙 (2026-11-27)
         # 대표 헤드라인: 묶음 안에서 다른 헤드라인과 가장 많이 겹치는 것
         rep = max(members, key=lambda j: sum(textsim.cosine(feats[j], feats[k]) for k in members))
         topics.append({"title": heads[rep]["title"][:60], "headline_ids": [h["id"] for h in hs],
                        "policy_event": bool(tri["relevant"]), "importance": int(tri["importance"]),
-                       "market_path": "", "n_outlets": len(set().union(*(h["outlets"] for h in hs))), "mode": "rule"})
+                       "market_path": "", "n_outlets": len(set().union(*(h["outlets"] for h in hs))), "mode": "rule", "triage_mode": tri["mode"]})
     topics.sort(key=lambda t: (t["n_outlets"], len(t["headline_ids"]), t["importance"]), reverse=True)
     return topics[:n]
 

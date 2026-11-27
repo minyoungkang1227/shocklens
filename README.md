@@ -158,6 +158,18 @@ python -m agents.track_record --list
 
 데일리 워치가 분석한 토픽은 자동으로 `data/forecasts/forecasts.jsonl`에 기록되고(추가만, 수정 없음), 가격 데이터에 반응 창 3거래일이 들어오면 실제 포트폴리오 수익률로 채점됩니다(`scored.csv`). 기록 시점에 반응 창 첫날 장이 이미 열렸으면 '사후 해석'으로 따로 집계하고, 모델 실력은 '순수 예측'으로 봅니다. 데일리 워치 보고서 끝에 성적표가 붙습니다.
 
+### 5-3) 학습형 1차 분류기 (Haiku 판정 → 작은 분류기, 선택)
+
+```bash
+python -m pipeline.library_builder collect --start 2025-01-01 --end 2026-10-31   # 기사 + Haiku 판정 쌓기 (API 비용)
+python -m agents.triage_model status     # 몇 건 모였나
+python -m agents.triage_model gold       # 시험셋에서 사람 확인용 100건 -> data/eval/triage_gold.yaml (gold 칸 채우기)
+python -m agents.triage_model train      # 기준선(임베딩 + 로지스틱 회귀) 학습, pip install sentence-transformers 필요
+python -m agents.triage_model eval       # 규칙 / Haiku / 기준선 (/ LoRA) 비교표
+```
+
+결과가 규칙보다 나으면 `config/thresholds.yaml`의 `triage.learned.enabled: true`로 켭니다. 그러면 LLM 키가 없을 때와 데일리 워치에서 규칙 대신 학습 분류기를 씁니다. 설명: docs/agents.md 4-10.
+
 ### 6) 데이터 사본 (선택)
 
 ```bash

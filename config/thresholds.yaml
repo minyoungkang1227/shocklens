@@ -105,6 +105,10 @@ event_check:             # (2026-11-13) 사건 검수관: Event Analyst 해석�
 triage:
   enabled: true
   min_importance: 2      # 1~5. 이보다 낮으면 전체 분석을 생략 (force로 강제 실행 가능)
+  learned:               # 학습 분류기 (agents/triage_model.py). LLM이 없거나 실패할 때 규칙보다 먼저 쓴다
+    enabled: false       # triage_model eval 결과를 보고 사람이 켠다. 켜도 모델 파일이 없으면 규칙으로 떨어지고 이유를 남긴다
+    path: data/model/triage_clf.npz
+    threshold: null      # null이면 학습 때 고른 문턱값
 
 news:
   headline_max_chars: 140   # 이보다 짧은 한 문장 입력은 헤드라인으로 보고 원문 기사를 찾는다

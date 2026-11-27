@@ -263,6 +263,19 @@ VIX는 미국 주식 변동성 하나라서 신용·자금시장에서 시작하
 - 브리핑의 국면 근거 문장과 데일리 워치 상단 '시장 국면' 줄에 세 지수가 함께 나온다.
 - 남은 일: OFR CSV 직링크는 사이트에서 확인되지 않아 후보 주소 2개로 시도(실패하면 `config/indicators.yaml`에 'Download all data' 주소를 넣으면 됨). AI-GPR을 위기 트리거로 쓸지는 과거 사건 반응과 비교한 뒤 정한다.
 
+## 4-10. 학습형 1차 분류기 (`agents/triage_model.py`, 2026-11-27)
+
+- **왜:** LLM 키가 없으면 1차 분류가 키워드 규칙으로 떨어지고, 데일리 워치는 처음부터 규칙만 썼다. 규칙은 사전에 없는 표현("핵심 소재 반출 제한")을 놓친다.
+- **방법 (증류):** Haiku가 판정해 둔 기사(`library_builder collect`의 `articles.jsonl`)를 정답으로 삼아 작은 분류기를 학습한다. 기준선은 다국어 문장 임베딩(MiniLM) + L2 로지스틱 회귀(numpy, 클래스 불균형 가중). 라벨은 keep 이진. 문턱값은 학습셋 F1로 고른다.
+- **분할:** 수집 월(`seen`) 기준. 과거 달은 학습, 최근 달은 시험. 한 달은 통째로 한쪽에만 들어간다(같은 사건 기사의 누수 방지). 규칙으로 판정된 기사는 정답으로 쓰지 않는다.
+- **평가 (`python -m agents.triage_model eval`):** 같은 시험셋에서 규칙 / Haiku / 기준선 / LoRA를 비교한다. 표는 세 개다.
+  - Haiku 라벨 기준: '얼마나 흉내 냈나'
+  - 사람 라벨 기준(`data/eval/triage_gold.yaml`, `gold` 명령으로 100건 추출): '실제로 얼마나 맞나'. 여기서 Haiku 자신의 오답률도 보인다
+  - 함정 시험지(`data/eval/not_policy_cases.yaml`): 통과 건수가 적을수록 좋다
+- **연결 순서:** `triage.classify()` = LLM → 학습 분류기 → 규칙. 데일리 워치의 토픽 분류도 `classify()`를 거친다. 설정 `triage.learned.enabled`는 기본 꺼짐이다. 켜도 모델 파일·임베딩 패키지가 없으면 규칙으로 떨어지고 그 이유를 reason에 남긴다.
+- **LoRA (`scripts/train_lora_triage.py`):** Qwen2.5-0.5B + 분류 헤드, r=8, alpha=16, SEQ_CLS. 같은 분할로 학습하고 시험셋·함정 사례 예측만 저장해 `eval --lora`로 비교한다. 기준선을 확실히 이길 때만 실사용에 연결한다. 작성 환경에서 실행해 보지 못했다(GPU 없음).
+- **현재 상태:** 학습 데이터 0건. `library_builder collect`를 Haiku 키로 먼저 돌려야 한다.
+
 ## 5. 구현 위치
 
 `agents/state.py`(스키마·어휘) · `llm.py`(공급자 전환, 키 없으면 규칙 경로) · `context.py`(모델 데이터) · `event_analyst.py` · `analog_finder.py` · `exposure_analyst.py` · `shock_mapper.py` · `risk_agent.py` · `reporter.py` · `verifier.py` · `hq.py`(LangGraph, What-if) · `injection.py`(주입 방어) · `news_input.py`(뉴스 입력 도구) · `triage.py`(중요도 1차 분류) · `analog_eval.py`(재순위 평가) · `followup.py`(후속 질문) · `llm_compare.py`(LLM 비교 실험) · `run.py`(CLI) · 테스트 `tests/test_agents.py`, `tests/test_features.py`, `tests/test_features2.py` · `tools/news.py`, `tools/docs.py` · `pipeline/library_builder.py` · `daily_watch.py`(데일리 워치) · `track_record.py`(실전 성적표) · `event_checker.py`(사건 검수관) · 테스트 `tests/test_domestic_daily.py`, `tests/test_security.py`(SSRF·구획 탈출 회귀)
