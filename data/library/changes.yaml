@@ -1,0 +1,199 @@
+# 사건 라이브러리(events.yaml) 손 라벨 변경 기록. 사건마다 마지막 줄의 fingerprint가 현재 라벨과 같아야 한다.
+# 고친 뒤: python -m pipeline.changelog add --event ID --by 이름 --reason "사유"
+# 2026-11-27 이전의 변경 이력은 git log -- data/library/events.yaml 에만 있다.
+changes:
+  - event: us_301_2018
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 0b729e4ca5e7ba45
+  - event: us_tariff_2019
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 20fe7734b62249d5
+  - event: us_huawei_2019
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: ae713e826ff0034b
+  - event: cn_fx7_2019
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 8148861e725a53c8
+  - event: ru_swift_2022
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: d1ad734038b0a0a8
+  - event: us_chip_2022
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: b32a8afd4d8886f2
+  - event: us_chip_2023
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: ca9ca121fa3a6f01
+  - event: cn_ga_ge_2023
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 2483566da408e90d
+  - event: cn_ban_us_2024
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 4cf178b820c3dfb1
+  - event: cn_ree_2025
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 06bec97ddf60166e
+  - event: cn_ree_oct_2025
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: d9082b43256780c2
+  - event: us_pause_2025
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 2ca5b6a2839d3efd
+  - event: us_cn_geneva_2025
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: b892ba7bf750113b
+  - event: us_steel_2002
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 2f2cd139842ee9e1
+  - event: cn_depeg_2005
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: a82f1eb9ecfc8bf9
+  - event: us_tire_2009
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 6b82f60328e7388a
+  - event: cn_ree_jp_2010
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 29fb50edc0aea9d6
+  - event: ru_crimea_2014
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 6805becd24ac4b9e
+  - event: us_steel_2018
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: bc22fccff63090c7
+  - event: us_iran_2018
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 490bd51431143688
+  - event: jp_kr_2019
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 1936439e14e30ba7
+  - event: us_fdpr_2020
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: c50a92c0d6f7e3b6
+  - event: us_outbound_2023
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 7a5aff16897edb02
+  - event: us_ev_2024
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 28c257a333383126
+  - event: us_ira_2022
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 133ae2f89e67f317
+  - event: us_chips_2022
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 0562bd9b8738d82a
+  - event: cn_alibaba_antitrust_2020
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 13ecbe4250849847
+  - event: cn_didi_cac_2021
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 4403166de5041cfb
+  - event: cn_edu_ban_2021
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 19292e8929945828
+  - event: us_bigtech_antitrust_2019
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: a289a17527b08e65
+  - event: us_ga_runoff_2021
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 76dc7e3e9c6152b7
+  - event: us_midterm_2018
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 9079895be46dac4d
+  - event: us_chip_curbs_2024
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: b18f30af3584c27b
+  - event: us_ai_diffusion_2025
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 0fb7ccd39f1484d9
+  - event: us_h20_2025
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 8a2d7c892737d03e
+  - event: us_midterm_2026
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 8d12dcf429df48a7
+  - event: kr_margin_relief_2026
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 9b3b09d738c24cf6
+  - event: ir_hormuz_close_2026
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: b8803b1e6c41c2c0
+  - event: ir_hormuz_hold_2026
+    date: '2026-11-27'
+    by: claude-draft
+    reason: '기준선: 이 날짜 현재의 라벨을 등록(변경 아님)'
+    fingerprint: 4d2c10b825429a6e

@@ -115,6 +115,8 @@ python -m pipeline.library_builder label --limit 5                              
 ```
 후보의 clean 판정·날짜 확인은 사람이 하고, 검수한 사건만 events.yaml로 옮깁니다.
 
+라벨(강도 6요소·채널·clean·날짜 등)을 손으로 고치면 `python -m pipeline.changelog add --event ID --by 이름 --reason "사유"`로 `data/library/changes.yaml`에 기록합니다. 기록 없이 바뀐 라벨은 테스트가 막습니다(BCBS 239 원칙 3: 수작업 수정은 사유를 남긴다). 설명문 수정은 기록하지 않아도 됩니다.
+
 ### 5) 에이전트 실행 (헤드쿼터 + 에이전트 7개)
 
 ```bash
